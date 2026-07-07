@@ -13,5 +13,5 @@ evals.json(47)
 internals.md(95)
 
 ## `scripts/` (2 files) → __navi__.md
-navindex.py(582)  test_navindex.py(80)
+navindex.py(595)  test_navindex.py(80)
 

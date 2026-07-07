@@ -58,8 +58,8 @@ default 300) · --min-lines N (skip files shorter than N entirely, default 0) ·
 #   L495   HOOK_MARK
 #   L497   _wants_header
 #   L508   install_hook
-#   L530   entrypoint
-#   L532   main
+#   L543   entrypoint
+#   L545   main
 # ======================= END NAV INDEX =======================
 
 import argparse, hashlib, json, os, re, sys, datetime
@@ -506,11 +506,24 @@ def _wants_header(path, threshold):
     return len(lines) >= threshold or any("BEGIN NAV INDEX" in ln for ln in lines[:50])
 
 def install_hook(rroot):
-    """Write .git/hooks/pre-commit: refresh headers on staged source files (--auto) and re-stage
-    them, so committed headers can never go stale. Refuses to clobber a foreign hook."""
-    hooks = os.path.join(rroot, ".git", "hooks")
-    if not os.path.isdir(hooks):
-        sys.exit("navindex: no .git/hooks found — run from inside a git repo")
+    """Write the repo's pre-commit hook: refresh headers on staged source files (--auto) and
+    re-stage them, so committed headers can never go stale. Refuses to clobber a foreign hook.
+    Hooks dir comes from `git rev-parse --git-path hooks`, so worktrees resolve to the main
+    repo's .git/hooks (one install covers every worktree)."""
+    import subprocess
+    hooks = ""
+    try:
+        r = subprocess.run(["git", "rev-parse", "--git-path", "hooks"],
+                           capture_output=True, text=True, cwd=rroot)
+        if r.returncode == 0:
+            hooks = os.path.join(rroot, r.stdout.strip())  # join keeps an absolute path as-is
+    except OSError:
+        pass
+    if not hooks:
+        hooks = os.path.join(rroot, ".git", "hooks")  # fallback: plain repo layout, no git CLI
+        if not os.path.isdir(os.path.join(rroot, ".git")):
+            sys.exit("navindex: no .git found — run from inside a git repo")
+    os.makedirs(hooks, exist_ok=True)
     dst = os.path.join(hooks, "pre-commit")
     me = os.path.abspath(__file__).replace(os.sep, "/")
     if os.path.exists(dst) and HOOK_MARK not in open(dst, encoding="utf-8", errors="ignore").read():
