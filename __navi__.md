@@ -4,14 +4,14 @@
 Universal index: every folder below -> the files it holds (names only). A `→ __navi__.md` marker means that folder has a symbol map — open `<that path>/__navi__.md` for exact line numbers (2 reads total: this tree -> folder map).
 
 ## `./` (2 files)
-README.md(67)  SKILL.md(135)
+README.md(74)  SKILL.md(146)
 
 ## `evals/` (1 files)
-evals.json(23)
+evals.json(47)
 
 ## `references/` (1 files)
-internals.md(66)
+internals.md(95)
 
 ## `scripts/` (2 files) → __navi__.md
-navindex.py(570)  test_navindex.py(80)
+navindex.py(582)  test_navindex.py(80)
 
