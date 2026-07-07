@@ -16,36 +16,50 @@ Usage:
   python navindex.py path/to/file.py [more.py ...]        # FILE mode
   python navindex.py backend/src --depth 4                # FOLDER mode
   python navindex.py                                       # FOLDER mode on the repo root
+  python navindex.py --install-hook                        # pre-commit hook: headers never stale
 Folder flags: --depth N (recursion, default 6) · --threshold N (min lines for a header,
 default 300) · --min-lines N (skip files shorter than N entirely, default 0) · --max-lines N
 (skip files longer than N — generated/huge, default 8000) · --map-only (only __navi__.md) ·
---no-map (only headers).
+--no-map (only headers). File flags: --auto (only files already carrying a header or at/above
+--threshold — what the pre-commit hook passes).
 """
 # ====================== BEGIN NAV INDEX ======================
 # NAV INDEX — auto-generated symbol map (refresh via the navindex skill)
-#   L53    TOP
-#   L55    per-file core
-#   L57    comment_token
-#   L60    symbols
-#   L93    docstring_end
-#   L113   strip_old
-#   L123   build
-#   L145   folder driver
-#   L147   CODE_EXT
-#   L148   SKIP_DIRS
-#   L151   MAX_LINES
-#   L152   DOC_EXT
-#   L154   MAP_NAME
-#   L155   CACHE_NAME
-#   L157   _is_vendor
-#   L161   find_repo_root
-#   L174   doc_descriptor
-#   L196   body_hash
-#   L205   walk
-#   L220   run_folder
-#   L265   write_map
-#   L291   entrypoint
-#   L293   main
+#   L67    TOP
+#   L69    per-file core
+#   L71    comment_token
+#   L74    file_eol
+#   L86    JS_KW
+#   L89    symbols
+#   L153   docstring_end
+#   L173   strip_old
+#   L183   build
+#   L215   folder driver
+#   L217   CODE_EXT
+#   L218   SKIP_DIRS
+#   L222   CACHE_VER
+#   L223   HASHFILE
+#   L224   MAX_LINES
+#   L225   DOC_EXT
+#   L227   MAP_NAME
+#   L228   CACHE_NAME
+#   L230   _is_vendor
+#   L234   find_repo_root
+#   L247   doc_descriptor
+#   L269   body_hash
+#   L280   walk
+#   L297   run_folder
+#   L401   _is_generated_map
+#   L411   cleanup_stale_maps
+#   L428   _is_detailed
+#   L435   write_map
+#   L468   write_tree
+#   L493   pre-commit hook
+#   L495   HOOK_MARK
+#   L497   _wants_header
+#   L508   install_hook
+#   L530   entrypoint
+#   L532   main
 # ======================= END NAV INDEX =======================
 
 import argparse, hashlib, json, os, re, sys, datetime
@@ -57,16 +71,51 @@ TOP = "NAV INDEX — auto-generated symbol map (refresh via the navindex skill)"
 def comment_token(path):
     return "//" if os.path.splitext(path)[1] in (".js", ".jsx", ".ts", ".tsx") else "#"
 
+def file_eol(path):
+    """'\\r\\n' if the file's first line break is CRLF, else '\\n'. Rewrites must keep the
+    original EOL: open(..., 'w') without newline= translates \\n -> os.linesep, which would
+    CRLF-ify an LF repo on Windows and turn a header refresh into a whole-file diff."""
+    try:
+        with open(path, "rb") as f:
+            chunk = f.read(8192)
+    except OSError:
+        return "\n"
+    j = chunk.find(b"\n")
+    return "\r\n" if j > 0 and chunk[j - 1:j] == b"\r" else "\n"
+
+JS_KW = {"if", "for", "while", "switch", "catch", "return", "else", "do", "try",
+         "new", "function", "typeof", "await", "yield"}  # never method names
+
 def symbols(lines, ext):
     out = []
+    in_class = False   # inside a top-level class body → members index as ".name"
+    m_indent = None    # member indent = indent of the FIRST non-blank line after `class`;
+                       # only lines at exactly that indent are members, so statements inside
+                       # method bodies (always deeper) can never false-positive as methods.
     for i, ln in enumerate(lines, 1):
         s = ln.rstrip("\n")
+        ind = len(s) - len(s.lstrip())
+        if in_class and s.strip() and m_indent is None:
+            m_indent = ind
         if ext in (".js", ".jsx", ".ts", ".tsx"):
+            m = (re.match(r"^export default (?:abstract )?class (\w+)", s)
+                 or re.match(r"^(?:export )?(?:abstract )?class (\w+)", s))
+            if m:
+                out.append((i, "class " + m.group(1))); in_class, m_indent = True, None; continue
+            if s and not s[0].isspace() and not s.startswith("//"):
+                in_class, m_indent = False, None  # any other column-0 code ends the class body
             m = (re.match(r"^export default function (\w+)", s) or re.match(r"^export (?:async )?function (\w+)", s)
                  or re.match(r"^export const (\w+)", s) or re.match(r"^(?:async )?function (\w+)", s)
-                 or re.match(r"^const (\w+) = ", s))
+                 or re.match(r"^const (\w+) = ", s)
+                 or re.match(r"^(?:export )?(?:declare )?(?:interface|enum) (\w+)", s)
+                 or re.match(r"^(?:export )?type (\w+) *=", s))
             if m: out.append((i, m.group(1)))
             elif re.match(r"^export default ", s): out.append((i, "export default"))
+            elif in_class and ind == m_indent and (
+                    (mm := re.match(r"^\s+(?:(?:public|private|protected|static|readonly|async|get|set|override|abstract)\s+)*(\w+)\s*\([^)]*\)[^;{}]*\{[\s}]*$", s))
+                    or (mm := re.match(r"^\s+(?:(?:public|private|protected|static|readonly)\s+)*(\w+)\s*=\s*(?:async\s*)?\(", s))):
+                # ponytail: single-line signatures only — a param list spanning lines is missed
+                if mm.group(1) not in JS_KW: out.append((i, "." + mm.group(1)))
             elif re.match(r"^// ?[-=]{3,}", s):
                 lbl = s.lstrip("/ -=")[:70]
                 if lbl: out.append((i, lbl))  # drop banners that are only dashes/equals (empty label)
@@ -75,12 +124,22 @@ def symbols(lines, ext):
             if m: out.append((i, m.group(1)))
             # NOTE: bare `param(` blocks are intentionally NOT indexed — they're not jump targets
             # (the function name above them is), and every function has one, so they flood the map.
+            elif re.match(r"^class\s+([\w-]+)", s, re.I):
+                # ponytail: PS class methods not indexed — rare; add member matching if a repo needs it
+                out.append((i, "class " + re.match(r"^class\s+([\w-]+)", s, re.I).group(1)))
             elif re.match(r"^#\s?[-=]{3,}", s):
                 lbl = s.lstrip("# -=")[:70]
                 if lbl: out.append((i, lbl))
         else:
-            m = re.match(r"^(?:async def|def|class) (\w+)", s)
-            if m: out.append((i, m.group(1)))
+            m = re.match(r"^(async def|def|class) (\w+)", s)
+            if m:
+                out.append((i, m.group(2)))
+                in_class, m_indent = (m.group(1) == "class"), None
+                continue
+            if s and s[0] not in " \t#@":
+                in_class, m_indent = False, None  # column-0 code (not comment/decorator) ends the class
+            if in_class and ind == m_indent and (mm := re.match(r"^\s+(?:async def|def) (\w+)", s)):
+                out.append((i, "." + mm.group(1)))
             # Route decorators only (they carry the URL path) — skip @lru_cache/@property/@validator
             # etc., whose real symbol is the def on the next line anyway.
             elif re.match(r"^@\w[\w.]*\.(?:get|post|put|patch|delete|head|options|websocket|route)\(", s):
@@ -148,7 +207,7 @@ def build(path, lines=None):
     block.append("\n")
     assert len(block) == height, f"height mismatch {len(block)} vs {height}"
     out = lines[:ins] + block + lines[ins:]
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8", newline=file_eol(path)) as f:
         f.writelines(out)
     print(f"navindex: {os.path.basename(path)} ({len(syms)} symbols)")
     return (True, out)
@@ -160,7 +219,7 @@ SKIP_DIRS = {"__pycache__", "node_modules", ".git", "dist", "build", ".venv", "v
              ".pytest_cache", ".mypy_cache", "migrations", "alembic", "assets", "vendor",
              "volumes",   # 'volumes' = runtime bind-mount data (DB/redis/etc.) — never map
              "cache", ".cache"}  # generated tool caches (e.g. content-addressed AST dumps)
-CACHE_VER = 2  # bump when symbol extraction changes, to invalidate stale cached symbol lists
+CACHE_VER = 3  # bump when symbol extraction changes, to invalidate stale cached symbol lists
 HASHFILE = re.compile(r"^[0-9a-f]{32,}\.")  # content-addressed cache artifacts (sha-named blobs)
 MAX_LINES = 8000  # default upper cap; overridable via --max-lines
 DOC_EXT = {".md", ".json", ".html", ".htm", ".css", ".sql", ".yml", ".yaml",
@@ -431,6 +490,43 @@ def write_tree(rroot, args, entries, detailed):
         out.append("")
     open(os.path.join(rroot, MAP_NAME), "w", encoding="utf-8").write("\n".join(out) + "\n")
 
+# ---------------------------------------------------------------- pre-commit hook
+
+HOOK_MARK = "# navindex pre-commit hook"
+
+def _wants_header(path, threshold):
+    """--auto gate: touch only files that already carry a header, or are big enough to earn one.
+    Keeps the pre-commit hook from stamping headers onto every tiny staged file."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.readlines()
+    except (UnicodeDecodeError, OSError):
+        return False
+    # ponytail: header is searched in the first 50 lines — enough past any shebang/docstring
+    return len(lines) >= threshold or any("BEGIN NAV INDEX" in ln for ln in lines[:50])
+
+def install_hook(rroot):
+    """Write .git/hooks/pre-commit: refresh headers on staged source files (--auto) and re-stage
+    them, so committed headers can never go stale. Refuses to clobber a foreign hook."""
+    hooks = os.path.join(rroot, ".git", "hooks")
+    if not os.path.isdir(hooks):
+        sys.exit("navindex: no .git/hooks found — run from inside a git repo")
+    dst = os.path.join(hooks, "pre-commit")
+    me = os.path.abspath(__file__).replace(os.sep, "/")
+    if os.path.exists(dst) and HOOK_MARK not in open(dst, encoding="utf-8", errors="ignore").read():
+        sys.exit(f"navindex: {dst} exists and isn't ours — add the navindex call to it manually")
+    body = (
+        "#!/bin/sh\n"
+        f"{HOOK_MARK} (auto-generated; delete this file to uninstall)\n"
+        "staged=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\\.(py|jsx?|tsx?|ps1)$')\n"
+        "[ -z \"$staged\" ] && exit 0\n"
+        f"echo \"$staged\" | tr '\\n' '\\0' | xargs -0 python \"{me}\" --auto || exit 1\n"
+        "echo \"$staged\" | tr '\\n' '\\0' | xargs -0 git add\n")
+    with open(dst, "w", encoding="utf-8", newline="\n") as f:
+        f.write(body)
+    os.chmod(dst, 0o755)
+    print(f"navindex: pre-commit hook installed -> {dst}")
+
 # ---------------------------------------------------------------- entrypoint
 
 def main():
@@ -447,9 +543,18 @@ def main():
                     help="[folder] skip files with more than N lines (generated/huge; default 8000)")
     ap.add_argument("--map-only", action="store_true", help="[folder] only (re)build __navi__.md, no headers")
     ap.add_argument("--no-map", action="store_true", help="[folder] only refresh headers, no __navi__.md")
+    ap.add_argument("--install-hook", action="store_true",
+                    help="install a git pre-commit hook that auto-refreshes headers on staged files")
+    ap.add_argument("--auto", action="store_true",
+                    help="[file] only touch files that already have a header or meet --threshold "
+                         "(what the pre-commit hook passes)")
     args = ap.parse_args()
     paths = args.paths or ["."]
     rroot = find_repo_root()
+
+    if args.install_hook:
+        install_hook(rroot)
+        return
 
     # FOLDER mode: a single positional that resolves to a directory (CWD- or repo-root-relative).
     if len(paths) == 1:
@@ -465,10 +570,12 @@ def main():
     any_file = False
     for p in paths:
         if os.path.isfile(p):
+            if args.auto and not _wants_header(p, args.threshold):
+                continue  # hook mode: small file without a header — leave it alone
             build(p); any_file = True
         else:
             print(f"navindex: skip (not a file or folder): {p}", file=sys.stderr)
-    if not any_file:
+    if not any_file and not args.auto:  # --auto skipping everything is success, not an error
         sys.exit("navindex: nothing to do (no valid file or folder given)")
 
 if __name__ == "__main__":

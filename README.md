@@ -11,8 +11,8 @@ script runs standalone too.
 ## What it produces
 
 - **In-file header** — a comment block at the very top of a large file mapping each line number to
-  the symbol there (functions, classes, decorators, route handlers, section banners). Read the
-  first ~40 lines, jump straight to what you need.
+  the symbol there (functions, classes and their methods, TS interfaces/types/enums, route
+  handlers, section banners). Read the first ~40 lines, jump straight to what you need.
 - **Folder map (`__navi__.md`)** — per substantial folder: every code file → its symbol outline
   with exact line numbers, every doc file → a one-line descriptor, and a breadcrumb up to the root.
 - **Root tree (`__navi__.md` at the repo root)** — every folder → the files it holds and a pointer
@@ -47,9 +47,16 @@ Common flags (folder mode): `--depth N` recursion depth, `--threshold N` min lin
 header (default 300), `--min-lines` / `--max-lines` size gates, `--map-only` / `--no-map`. Full
 table and semantics in [`SKILL.md`](SKILL.md).
 
-The indexes are **generated from the code**, so regenerate them after structural changes — a stale
+Install the pre-commit hook once and headers keep themselves fresh at every commit:
+
+```
+python scripts/navindex.py --install-hook
+```
+
+The indexes are **generated from the code**, so regenerate maps after structural changes — a stale
 index is worse than none. Both modes are idempotent (the header is stripped and rebuilt, not
-stacked), so re-running is safe.
+stacked), re-running is safe, and rewrites preserve the file's original line endings (LF repos
+stay LF on Windows).
 
 ## Housekeeping
 

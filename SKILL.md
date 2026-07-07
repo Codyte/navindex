@@ -69,6 +69,15 @@ Regenerate right after the code structure changes, so the index stays trustworth
 By convention, a substantially edited or newly created source file should carry a NAV INDEX
 header, and each large area should have a current `__navi__.md`.
 
+**Or stop remembering: install the pre-commit hook once per repo** —
+```
+python <skill>/scripts/navindex.py --install-hook
+```
+Every commit then auto-refreshes headers on the staged source files (only files that already
+carry a header or are at/above `--threshold`) and re-stages them, so committed headers can never
+go stale. Delete `.git/hooks/pre-commit` to uninstall; a foreign pre-commit hook is never
+overwritten. Folder maps still need a manual folder run after structural changes.
+
 ## How to run
 
 One bundled script, `scripts/navindex.py`, does both jobs — it **auto-detects the mode from the
@@ -102,6 +111,8 @@ Flags (folder mode only; ignored in file mode):
 | `--max-lines N` | 8000 | skip files longer than N lines (generated/huge) |
 | `--map-only` | off | only (re)build `__navi__.md`, don't touch any headers |
 | `--no-map` | off | only refresh headers, don't write `__navi__.md` |
+| `--install-hook` | — | install a git pre-commit hook in the current repo (see above) |
+| `--auto` | off | file mode: only touch files already carrying a header or at/above `--threshold` — what the hook passes |
 
 The three line-count gates work together: a file is **considered** only when `--min-lines ≤ its
 length ≤ --max-lines`; among considered code files, those at/above `--threshold` also get an

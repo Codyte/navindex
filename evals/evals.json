@@ -18,6 +18,30 @@
       "prompt": "Onde está a lógica de rate-limiting nesse repo? Não conheço o layout do projeto ainda.",
       "expected_output": "Reads the folder's __navi__.md FIRST to locate the rate-limit symbol/file (and its line) instead of blindly grepping, then opens exactly that file/line.",
       "files": ["fixture repo with an existing __navi__.md that indexes a file containing rate-limit logic"]
+    },
+    {
+      "id": 4,
+      "prompt": "Quero que os cabeçalhos NAV INDEX nunca mais fiquem desatualizados nesse repo, sem eu ter que lembrar de rodar nada.",
+      "expected_output": "Runs navindex.py --install-hook, which writes .git/hooks/pre-commit; explains that staged source files now get their headers refreshed (--auto) and re-staged on every commit, and that maps still need a folder run after structural changes.",
+      "files": ["fixture git repo"]
+    },
+    {
+      "id": 5,
+      "prompt": "Roda o navindex duas vezes seguidas no mesmo arquivo e me prova que ele não duplica o cabeçalho nem muda os line endings.",
+      "expected_output": "Runs file mode twice; shows the second run produces a byte-identical file (single header, stripped and rebuilt) and that an LF file stays LF / CRLF stays CRLF.",
+      "files": ["fixture LF .py file and CRLF .py file"]
+    },
+    {
+      "id": 6,
+      "prompt": "Esse arquivo TypeScript tem uma classe grande com vários métodos — o índice deveria me mostrar cada método com a linha, não só o nome da classe.",
+      "expected_output": "Header/map lists the class as `class Name` plus each method and arrow-function field as `.method` with its exact line; statements inside method bodies do not appear as symbols.",
+      "files": ["fixture .ts file with an exported class containing methods, arrow fields, and nested calls like fetch().then()"]
+    },
+    {
+      "id": 7,
+      "prompt": "Renomeei services/ para core/ e apaguei metade dos arquivos. Atualiza os índices e não deixa lixo pra trás.",
+      "expected_output": "Re-runs folder mode from the repo root; the stale services/__navi__.md is auto-deleted (generated-map marker check), core/ gets a fresh map, and dead cache entries for removed files are pruned.",
+      "files": ["fixture repo where services/ was renamed to core/ leaving an old generated __navi__.md behind"]
     }
   ]
 }
