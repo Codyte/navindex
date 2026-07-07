@@ -1,0 +1,4 @@
+.navindex-cache.json
+*.bak
+__pycache__/
+*.pyc

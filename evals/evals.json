@@ -1,0 +1,23 @@
+{
+  "skill_name": "navindex",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Acabei de quebrar um módulo grande em vários arquivos dentro de services/. Cria um mapa de navegação dessa pasta pra eu ver o que está onde, com as linhas de cada função.",
+      "expected_output": "Runs navindex.py on the services/ folder (folder mode, auto-detected), producing services/__navi__.md that lists each file with its symbol outline and exact line numbers.",
+      "files": ["fixture repo with services/ containing several .py files"]
+    },
+    {
+      "id": 2,
+      "prompt": "Adicionei umas funções no topo de api.py e o índice de linhas lá no cabeçalho ficou todo errado agora. Conserta o NAV INDEX desse arquivo.",
+      "expected_output": "Runs navindex.py on api.py (file mode), stripping the stale header and rebuilding it so each Lnn points at the real current line of that symbol. Idempotent.",
+      "files": ["fixture api.py with an outdated NAV INDEX header"]
+    },
+    {
+      "id": 3,
+      "prompt": "Onde está a lógica de rate-limiting nesse repo? Não conheço o layout do projeto ainda.",
+      "expected_output": "Reads the folder's __navi__.md FIRST to locate the rate-limit symbol/file (and its line) instead of blindly grepping, then opens exactly that file/line.",
+      "files": ["fixture repo with an existing __navi__.md that indexes a file containing rate-limit logic"]
+    }
+  ]
+}
