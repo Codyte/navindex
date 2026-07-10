@@ -58,6 +58,26 @@ index is worse than none. Both modes are idempotent (the header is stripped and 
 stacked), re-running is safe, and rewrites preserve the file's original line endings (LF repos
 stay LF on Windows).
 
+## Benchmark
+
+Measured on a large production codebase (real transcript token counts, not estimates). Locating and
+describing 6 functions scattered through a **2528-line file**, using the in-file **NAV INDEX header**
+instead of grepping cut the context the agent moved — at **identical 6/6 correctness**, on both the
+cheapest and a frontier model:
+
+| Model | Total context moved | Context re-sent per turn (cache-read) |
+|---|---:|---:|
+| Haiku | **−37 %** | **−46 %** |
+| Opus | **−31 %** | **−49 %** |
+
+Both arms navigated surgically (neither read the whole file), so these are conservative floors. The
+**folder map** on a cross-file trace helps cheaper models more than frontier ones (model-dependent).
+Across every run, **no `file:line` citation we spot-checked was fabricated** — the indexes give the
+agent a factual anchor.
+
+Full methodology, per-agent raw numbers, the exact reads each agent made, confounds, and everything
+we did *not* measure: [`BENCHMARK.md`](BENCHMARK.md).
+
 ## Housekeeping
 
 Commit the `__navi__.md` maps and in-file headers — they are part of the source. Don't commit
