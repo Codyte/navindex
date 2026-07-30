@@ -119,7 +119,7 @@ def symbols(lines, ext):
             elif re.match(r"^// ?[-=]{3,}", s):
                 lbl = s.lstrip("/ -=")[:70]
                 if lbl: out.append((i, lbl))  # drop banners that are only dashes/equals (empty label)
-        elif ext == ".ps1":
+        elif ext in (".ps1", ".psm1"):
             m = re.match(r"^\s*function\s+([\w-]+)", s, re.I)
             if m: out.append((i, m.group(1)))
             # NOTE: bare `param(` blocks are intentionally NOT indexed — they're not jump targets
@@ -171,14 +171,31 @@ def docstring_end(lines, ext):
     return i
 
 def strip_old(lines, tok):
-    start = end = None
-    for i, ln in enumerate(lines):
-        if ln.startswith(tok) and "BEGIN NAV INDEX" in ln: start = i
-        if ln.startswith(tok) and "END NAV INDEX" in ln: end = i; break
-    if start is not None and end is not None and end >= start:
+    # Marker lines are `<tok> ==== BEGIN/END NAV INDEX ====`. A symbol ENTRY that mentions the
+    # marker (`<tok>   L60    END NAV INDEX ...`) must NOT match, or the strip truncates
+    # mid-header and leaves the tail behind as an orphan block that stacks forever.
+    def marker(ln, kind):
+        return (ln.startswith(tok) and f"{kind} NAV INDEX" in ln
+                and ln[len(tok):].lstrip().startswith("="))
+    while True:
+        start = end = None
+        for i, ln in enumerate(lines):
+            if start is None and marker(ln, "BEGIN"): start = i
+            if marker(ln, "END"): end = i; break
+        if end is None: return lines
+        if start is None or start > end:
+            # orphan tail (END without BEGIN, left by older buggy strips): walk back over
+            # its entry/title lines so the whole block dies, not just the END line
+            start = end
+            while start > 0:
+                p = lines[start - 1]
+                body = p[len(tok):].lstrip() if p.startswith(tok) else None
+                if body is not None and (re.match(r"L\d+\s", body) or "NAV INDEX" in p):
+                    start -= 1
+                else:
+                    break
         del lines[start:end + 1]
         if start < len(lines) and lines[start].strip() == "": del lines[start]
-    return lines
 
 def build(path, lines=None):
     """Insert/refresh the NAV INDEX header on a single file. Idempotent.
@@ -190,14 +207,23 @@ def build(path, lines=None):
     tok = comment_token(path)
     if lines is None:
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            # utf-8-sig: um BOM lido como utf-8 vira '﻿' na linha 1 — o header seria
+            # inserido ANTES dele, deixando o BOM no MEIO do arquivo (quebra o parse do PS)
+            with open(path, "r", encoding="utf-8-sig") as f:
                 lines = f.readlines()
         except (UnicodeDecodeError, OSError) as e:
             print(f"navindex: skip (not utf-8) {os.path.basename(path)}: {e}", file=sys.stderr)
             return (False, [])
+    try:
+        with open(path, "rb") as f:
+            had_bom = f.read(3) == b"\xef\xbb\xbf"
+    except OSError:
+        had_bom = False
+    if lines and lines[0].startswith("﻿"):  # caller read without -sig
+        lines[0] = lines[0][1:]
     lines = strip_old(list(lines), tok)
     ins = docstring_end(lines, ext)
-    syms = [(n, lbl) for (n, lbl) in symbols(lines, ext) if n - 1 >= ins]
+    syms = [(n, lbl) for (n, lbl) in symbols(lines, ext) if n - 1 >= ins and "NAV INDEX" not in lbl]
     block = [tok + " " + "=" * 22 + " BEGIN NAV INDEX " + "=" * 22 + "\n",
              tok + " " + TOP + "\n"]
     height = len(syms) + 4  # 2 header (begin+title) + each sym + 1 end + 1 trailing blank
@@ -207,19 +233,20 @@ def build(path, lines=None):
     block.append("\n")
     assert len(block) == height, f"height mismatch {len(block)} vs {height}"
     out = lines[:ins] + block + lines[ins:]
-    with open(path, "w", encoding="utf-8", newline=file_eol(path)) as f:
+    # preserva o BOM original: PS5 lê utf-8 sem BOM como ANSI (mojibake nos acentos)
+    with open(path, "w", encoding="utf-8-sig" if had_bom else "utf-8", newline=file_eol(path)) as f:
         f.writelines(out)
     print(f"navindex: {os.path.basename(path)} ({len(syms)} symbols)")
     return (True, out)
 
 # ---------------------------------------------------------------- folder driver
 
-CODE_EXT = (".py", ".js", ".jsx", ".ts", ".tsx", ".ps1")
+CODE_EXT = (".py", ".js", ".jsx", ".ts", ".tsx", ".ps1", ".psm1")
 SKIP_DIRS = {"__pycache__", "node_modules", ".git", "dist", "build", ".venv", "venv",
              ".pytest_cache", ".mypy_cache", "migrations", "alembic", "assets", "vendor",
              "volumes",   # 'volumes' = runtime bind-mount data (DB/redis/etc.) — never map
              "cache", ".cache"}  # generated tool caches (e.g. content-addressed AST dumps)
-CACHE_VER = 3  # bump when symbol extraction changes, to invalidate stale cached symbol lists
+CACHE_VER = 4  # bump when symbol extraction changes, to invalidate stale cached symbol lists
 HASHFILE = re.compile(r"^[0-9a-f]{32,}\.")  # content-addressed cache artifacts (sha-named blobs)
 MAX_LINES = 8000  # default upper cap; overridable via --max-lines
 DOC_EXT = {".md", ".json", ".html", ".htm", ".css", ".sql", ".yml", ".yaml",
@@ -271,7 +298,7 @@ def body_hash(path, lines=None):
     Pass `lines` (raw readlines) to hash an already-read buffer without re-opening."""
     if lines is None:
         try:
-            lines = open(path, encoding="utf-8").readlines()
+            lines = open(path, encoding="utf-8-sig").readlines()
         except (UnicodeDecodeError, OSError):
             return None
     lines = strip_old(list(lines), comment_token(path))
@@ -323,7 +350,7 @@ def run_folder(root, rroot, args):
         # ---- one read per file (reused for line count, hash, symbols, header build) ----
         raw, decoded = None, True
         try:
-            raw = open(path, encoding="utf-8").readlines()
+            raw = open(path, encoding="utf-8-sig").readlines()
         except (UnicodeDecodeError, OSError):
             decoded = False
         if not decoded:
