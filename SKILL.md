@@ -10,7 +10,7 @@ description: >-
   single read instead of grepping blindly. Strongly prefer this skill when working in big files
   (1000+ lines), navigating an unfamiliar module, answering "where is X defined", building or
   refreshing code outlines / folder maps, or keeping navigation indexes current after a refactor.
-  Works in any git repo for Python, JS/JSX/TS/TSX, and PowerShell.
+  Works in any git repo for Python, JS/JSX/TS/TSX, PowerShell, and C#.
 ---
 
 # navindex — navigation indexes for large codebases
@@ -91,7 +91,7 @@ where it writes its cache and computes paths. Invoke by the script's path inside
 ```
 python <skill>/scripts/navindex.py path/to/file.py [more.py ...]
 ```
-Supported code: `.py`, `.js`, `.jsx`, `.ts`, `.tsx`, `.ps1`.
+Supported code: `.py`, `.js`, `.jsx`, `.ts`, `.tsx`, `.ps1`, `.cs`.
 
 **Refresh a whole folder** — pass a directory; regenerates `__navi__.md` and refreshes headers on
 large files in one pass:

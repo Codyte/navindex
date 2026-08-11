@@ -5,7 +5,7 @@ source files, plus a `__navi__.md` outline map per folder. Read the top of a fil
 map) and you know where every function lives, without opening the whole file or grepping blindly.
 
 One dependency-free Python script does both jobs. Works in any git repo for Python, JS/JSX/TS/TSX,
-and PowerShell. Ships as a [Claude Code](https://claude.com/claude-code) skill (`SKILL.md`), but the
+PowerShell and C#. Ships as a [Claude Code](https://claude.com/claude-code) skill (`SKILL.md`), but the
 script runs standalone too.
 
 ## What it produces

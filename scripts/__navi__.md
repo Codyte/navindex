@@ -1,9 +1,9 @@
 # __navi__ · `scripts/` — 2 files → symbols at exact line numbers
-<!-- navindex · 2026-07-07 · DO NOT EDIT BY HAND; regen via navindex skill -->
+<!-- navindex · 2026-08-11 · DO NOT EDIT BY HAND; regen via navindex skill -->
 ↑ repo tree: [`../__navi__.md`](../__navi__.md)
 
-- **navindex.py** (595 ln)
-  <sub>L67:TOP  L69:per-file core  L71:comment_token  L74:file_eol  L86:JS_KW  L89:symbols  L153:docstring_end  L173:strip_old  L183:build  L215:folder driver  L217:CODE_EXT  L218:SKIP_DIRS  L222:CACHE_VER  L223:HASHFILE  L224:MAX_LINES  L225:DOC_EXT  L227:MAP_NAME  L228:CACHE_NAME  L230:_is_vendor  L234:find_repo_root  L247:doc_descriptor  L269:body_hash  L280:walk  L297:run_folder …</sub>
-- **test_navindex.py** (80 ln)
-  <sub>L38:labels  L41:main</sub>
+- **navindex.py** (700 ln)
+  <sub>L77:TOP  L79:per-file core  L81:comment_token  L84:file_eol  L96:JS_KW  L99:CS_KW  L100:CS_MOD  L106:CS_TYPE  L107:CS_METHOD  L108:CS_PROP  L109:CS_CASE  L111:symbols  L195:docstring_end  L215:strip_old  L242:build  L284:folder driver  L286:CODE_EXT  L287:SKIP_DIRS  L291:CACHE_VER  L292:HASHFILE  L293:MAX_LINES  L294:DOC_EXT  L296:MAP_NAME  L297:CACHE_NAME …</sub>
+- **test_navindex.py** (144 ln)
+  <sub>L70:labels  L73:main</sub>
 

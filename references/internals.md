@@ -32,13 +32,42 @@ the class body. Deeper nesting (closures, inner classes) is intentionally skippe
 - bare `export default ...` → labeled "export default"
 - a `// ====` / `// ----` banner → its text
 
+**C# (`.cs`)**
+- `class` / `struct` / `interface` / `enum` / `record` with any modifier prefix → `class Name`,
+  `interface IName`, … A **nested** type is indexed but does not reset the member indent, so the
+  outer type's members declared after it are still found.
+- Method, constructor or property at the member indent → `.Name`. The line must carry at least one
+  modifier (`public`, `static`, `internal`, …) — that is what keeps statements out — and the
+  return-type slot rejects `=`, so `static readonly Regex Rx = new Regex(...)` reads as a field,
+  not as a method named `Regex`. Properties match `{ get` / `{ set` / `{ init` or an expression
+  body (`=>`). Plain fields are not indexed.
+- `case "literal":` → `case "literal"`, **at any nesting depth** — in a CLI the verb table is the
+  jump target you actually search for. Numeric and enum cases are skipped (noise).
+- a `// ====` / `// ----` banner → its trimmed text
+- The member indent skips the lone `{` under the type declaration: in C# that brace sits at the
+  *type's* indent, so taking it as the member indent would find no members at all.
+- Ceiling: a signature spanning several lines is missed (single-line match only).
+
 **PowerShell (`.ps1`)**
 - `function Name` (case-insensitive) → the name
 - `class Name` → `class Name` (members not indexed — rare; add if a repo needs it)
 - a `param(` block → labeled "param()"
 - a `# ====` / `# ----` banner → its text
 
-Comment token is `//` for JS/TS files, `#` for everything else.
+Comment token is `//` for JS/TS and C# files, `#` for everything else.
+
+## Gitignored paths
+
+In a git repo the walk skips anything `git ls-files --others --ignored --exclude-standard
+--directory` reports (one subprocess per run; `core.quotePath=false`, or non-ASCII folder names
+come back octal-escaped and never match). A wholly ignored folder is pruned at its top level, so
+its children are never visited; an ignored file inside a tracked folder is dropped individually.
+Tracked files are never affected — `--others` only lists untracked paths by construction.
+
+This is a leak guard, not an optimization: the maps get committed, so a gitignored payload folder
+would otherwise publish its folder and file names (customer projects, exports, scratch output) in
+a public repo. `--include-ignored` restores the old behavior; no git, or not a repo, degrades to
+mapping everything.
 
 ## Where the header is inserted
 
@@ -55,7 +84,7 @@ repo (which would turn a 30-line header diff into a whole-file diff).
 ## Pre-commit hook (`--install-hook`)
 
 `--install-hook` writes `.git/hooks/pre-commit` (marker: `# navindex pre-commit hook`). On each
-commit it collects staged `.py/.js/.jsx/.ts/.tsx/.ps1` files, runs the script on them with
+commit it collects staged `.py/.js/.jsx/.ts/.tsx/.ps1/.cs` files, runs the script on them with
 `--auto`, and re-stages them. `--auto` only touches files that already carry a header or are
 at/above `--threshold` — small headerless files pass through untouched, and a run where every
 file is skipped exits 0 so the commit proceeds. An existing pre-commit hook without the marker is
@@ -68,14 +97,15 @@ file.
   descriptor (for docs) or the first few symbols (for code).
 - Code files also get a `<sub>` line previewing up to 24 `Lnnn:symbol` pairs.
 - Doc descriptors: Markdown → first heading; JSON → `name`/`title`/`id`/`description` or top keys.
-- The map file lists both code (`.py .js .jsx .ts .tsx .ps1`) and docs (`.md .json .html .css
+- The map file lists both code (`.py .js .jsx .ts .tsx .ps1 .cs`) and docs (`.md .json .html .css
   .sql .yml .yaml .txt .toml .ini .cfg .sh`). `.env` is never listed.
 
 ## Skip rules
 
 - **Directories never walked**: `__pycache__`, `node_modules`, `.git`, `dist`, `build`, `.venv`,
   `venv`, `.pytest_cache`, `.mypy_cache`, `migrations`, `alembic`, `assets`, `vendor`, `volumes`,
-  and any dotfolder.
+  and any dotfolder. Plus everything git ignores (see *Gitignored paths*), unless
+  `--include-ignored`.
 - **Files never indexed**: the generated `__navi__.md` itself; vendored/minified bundles
   (`*.min.js`, `*.bundle.js`, `*.module.js`, `three.js`, `chart.js`); anything longer than
   `--max-lines` (default 8000) or shorter than `--min-lines` (default 0, i.e. off).

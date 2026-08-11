@@ -10,7 +10,10 @@ Portable: the repo root is detected from the current working directory (nearest 
 it from inside the target repo.
 
 Idempotent: re-running rebuilds the header/map in place (the old block is stripped first), so it
-never stacks. Supported code: .py, .js/.jsx/.ts/.tsx, .ps1.
+never stacks. Supported code: .py, .js/.jsx/.ts/.tsx, .ps1, .cs.
+
+Gitignored paths are skipped in a git repo (one `git ls-files` call per run) — a generated map
+must not leak the contents of folders the repo deliberately keeps out. `--include-ignored` opts out.
 
 Usage:
   python navindex.py path/to/file.py [more.py ...]        # FILE mode
@@ -20,56 +23,63 @@ Usage:
 Folder flags: --depth N (recursion, default 6) · --threshold N (min lines for a header,
 default 300) · --min-lines N (skip files shorter than N entirely, default 0) · --max-lines N
 (skip files longer than N — generated/huge, default 8000) · --map-only (only __navi__.md) ·
---no-map (only headers). File flags: --auto (only files already carrying a header or at/above
---threshold — what the pre-commit hook passes).
+--no-map (only headers) · --include-ignored (map gitignored paths too). File flags: --auto (only
+files already carrying a header or at/above --threshold — what the pre-commit hook passes).
 """
 # ====================== BEGIN NAV INDEX ======================
 # NAV INDEX — auto-generated symbol map (refresh via the navindex skill)
-#   L67    TOP
-#   L69    per-file core
-#   L71    comment_token
-#   L74    file_eol
-#   L86    JS_KW
-#   L89    symbols
-#   L153   docstring_end
-#   L173   strip_old
-#   L183   build
-#   L215   folder driver
-#   L217   CODE_EXT
-#   L218   SKIP_DIRS
-#   L222   CACHE_VER
-#   L223   HASHFILE
-#   L224   MAX_LINES
-#   L225   DOC_EXT
-#   L227   MAP_NAME
-#   L228   CACHE_NAME
-#   L230   _is_vendor
-#   L234   find_repo_root
-#   L247   doc_descriptor
-#   L269   body_hash
-#   L280   walk
-#   L297   run_folder
-#   L401   _is_generated_map
-#   L411   cleanup_stale_maps
-#   L428   _is_detailed
-#   L435   write_map
-#   L468   write_tree
-#   L493   pre-commit hook
-#   L495   HOOK_MARK
-#   L497   _wants_header
-#   L508   install_hook
-#   L543   entrypoint
-#   L545   main
+#   L77    TOP
+#   L79    per-file core
+#   L81    comment_token
+#   L84    file_eol
+#   L96    JS_KW
+#   L99    CS_KW
+#   L100   CS_MOD
+#   L106   CS_TYPE
+#   L107   CS_METHOD
+#   L108   CS_PROP
+#   L109   CS_CASE
+#   L111   symbols
+#   L195   docstring_end
+#   L215   strip_old
+#   L242   build
+#   L284   folder driver
+#   L286   CODE_EXT
+#   L287   SKIP_DIRS
+#   L291   CACHE_VER
+#   L292   HASHFILE
+#   L293   MAX_LINES
+#   L294   DOC_EXT
+#   L296   MAP_NAME
+#   L297   CACHE_NAME
+#   L299   _is_vendor
+#   L303   find_repo_root
+#   L316   doc_descriptor
+#   L338   body_hash
+#   L349   git_ignored
+#   L369   walk
+#   L398   run_folder
+#   L503   _is_generated_map
+#   L513   cleanup_stale_maps
+#   L530   _is_detailed
+#   L537   write_map
+#   L570   write_tree
+#   L595   pre-commit hook
+#   L597   HOOK_MARK
+#   L599   _wants_header
+#   L610   install_hook
+#   L645   entrypoint
+#   L647   main
 # ======================= END NAV INDEX =======================
 
-import argparse, hashlib, json, os, re, sys, datetime
+import argparse, hashlib, json, os, re, subprocess, sys, datetime
 
 TOP = "NAV INDEX — auto-generated symbol map (refresh via the navindex skill)"
 
 # ---------------------------------------------------------------- per-file core
 
 def comment_token(path):
-    return "//" if os.path.splitext(path)[1] in (".js", ".jsx", ".ts", ".tsx") else "#"
+    return "//" if os.path.splitext(path)[1] in (".js", ".jsx", ".ts", ".tsx", ".cs") else "#"
 
 def file_eol(path):
     """'\\r\\n' if the file's first line break is CRLF, else '\\n'. Rewrites must keep the
@@ -86,6 +96,18 @@ def file_eol(path):
 JS_KW = {"if", "for", "while", "switch", "catch", "return", "else", "do", "try",
          "new", "function", "typeof", "await", "yield"}  # never method names
 
+CS_KW = JS_KW | {"foreach", "using", "lock", "fixed", "when", "throw", "checked", "unchecked"}
+CS_MOD = (r"(?:(?:public|private|protected|internal|static|virtual|override|abstract|sealed|"
+          r"async|extern|unsafe|new|partial|readonly|const|event|volatile)\s+)")
+# A member line must carry at least one modifier (CS_MOD+), which is what keeps statements
+# (`if (x)`, `foreach (var y in z)`) out — they live deeper than the member indent anyway, but
+# the modifier is the cheap structural guard. `[^()=]*?` = the return type: barring '=' stops
+# `static readonly Regex Rx = new Regex(...)` from being read as a method named Regex.
+CS_TYPE = re.compile(r"^\s*" + CS_MOD + r"*(class|struct|interface|enum|record)\s+(\w+)")
+CS_METHOD = re.compile(r"^\s*" + CS_MOD + r"+(?:[^()=]*?\s+)?(\w+)\s*(?:<[^<>()]*>)?\s*\(")
+CS_PROP = re.compile(r"^\s*" + CS_MOD + r"+(?:[^()=]*?\s+)?(\w+)\s*(?:\{\s*(?:get|set|init)\b|=>)")
+CS_CASE = re.compile(r'^\s*case\s+"([^"]+)":')  # string-literal dispatch (CLI verb tables)
+
 def symbols(lines, ext):
     out = []
     in_class = False   # inside a top-level class body → members index as ".name"
@@ -95,8 +117,8 @@ def symbols(lines, ext):
     for i, ln in enumerate(lines, 1):
         s = ln.rstrip("\n")
         ind = len(s) - len(s.lstrip())
-        if in_class and s.strip() and m_indent is None:
-            m_indent = ind
+        if in_class and s.strip() and m_indent is None and not (ext == ".cs" and s.strip() == "{"):
+            m_indent = ind  # C#: the brace under `class X` sits at the CLASS indent, not the member's
         if ext in (".js", ".jsx", ".ts", ".tsx"):
             m = (re.match(r"^export default (?:abstract )?class (\w+)", s)
                  or re.match(r"^(?:export )?(?:abstract )?class (\w+)", s))
@@ -119,6 +141,26 @@ def symbols(lines, ext):
             elif re.match(r"^// ?[-=]{3,}", s):
                 lbl = s.lstrip("/ -=")[:70]
                 if lbl: out.append((i, lbl))  # drop banners that are only dashes/equals (empty label)
+        elif ext == ".cs":
+            m = CS_TYPE.match(s)
+            if m:
+                out.append((i, f"{m.group(1)} {m.group(2)}"))
+                # A NESTED type keeps the outer member indent: resetting it here would make every
+                # member after the nested class measure against the nested body and vanish.
+                if m_indent is None or ind < m_indent:
+                    in_class, m_indent = True, None
+                continue
+            if in_class and ind == m_indent and (
+                    (mm := CS_METHOD.match(s)) or (mm := CS_PROP.match(s))):
+                # ponytail: single-line signatures only — a param list spanning lines is missed
+                if mm.group(1) not in CS_KW: out.append((i, "." + mm.group(1)))
+            elif (mm := CS_CASE.match(s)):
+                # `case "verb":` is the jump target in a CLI dispatch switch, wherever it is
+                # nested — so this one is NOT gated on the member indent.
+                out.append((i, f'case "{mm.group(1)}"'))
+            elif re.match(r"^\s*// ?[-=]{3,}", s):
+                lbl = s.strip().lstrip("/ -=").rstrip(" -=")[:70]
+                if lbl: out.append((i, lbl))
         elif ext in (".ps1", ".psm1"):
             m = re.match(r"^\s*function\s+([\w-]+)", s, re.I)
             if m: out.append((i, m.group(1)))
@@ -154,7 +196,7 @@ def docstring_end(lines, ext):
     """Index (0-based) right after a leading module docstring / banner comment."""
     i = 0
     if lines and lines[0].startswith("#!"): i = 1
-    if ext in (".js", ".jsx", ".ts", ".tsx"):
+    if ext in (".js", ".jsx", ".ts", ".tsx", ".cs"):
         if i < len(lines) and lines[i].lstrip().startswith("/*"):
             while i < len(lines) and "*/" not in lines[i]: i += 1
             i += 1
@@ -241,12 +283,12 @@ def build(path, lines=None):
 
 # ---------------------------------------------------------------- folder driver
 
-CODE_EXT = (".py", ".js", ".jsx", ".ts", ".tsx", ".ps1", ".psm1")
+CODE_EXT = (".py", ".js", ".jsx", ".ts", ".tsx", ".ps1", ".psm1", ".cs")
 SKIP_DIRS = {"__pycache__", "node_modules", ".git", "dist", "build", ".venv", "venv",
              ".pytest_cache", ".mypy_cache", "migrations", "alembic", "assets", "vendor",
              "volumes",   # 'volumes' = runtime bind-mount data (DB/redis/etc.) — never map
              "cache", ".cache"}  # generated tool caches (e.g. content-addressed AST dumps)
-CACHE_VER = 4  # bump when symbol extraction changes, to invalidate stale cached symbol lists
+CACHE_VER = 5  # bump when symbol extraction changes, to invalidate stale cached symbol lists
 HASHFILE = re.compile(r"^[0-9a-f]{32,}\.")  # content-addressed cache artifacts (sha-named blobs)
 MAX_LINES = 8000  # default upper cap; overridable via --max-lines
 DOC_EXT = {".md", ".json", ".html", ".htm", ".css", ".sql", ".yml", ".yaml",
@@ -304,16 +346,48 @@ def body_hash(path, lines=None):
     lines = strip_old(list(lines), comment_token(path))
     return hashlib.sha1("".join(lines).encode("utf-8")).hexdigest()
 
-def walk(root, depth):
-    """Yield code/doc files within `depth` subfolder levels of root (depth 0 = root only)."""
+def git_ignored(rroot):
+    """POSIX-relative paths git ignores under `rroot` — a wholly ignored folder collapses to one
+    entry with a trailing '/'. ONE subprocess per run: `git check-ignore` per file would be
+    thousands of processes. `core.quotePath=false` keeps non-ASCII folder names readable instead
+    of octal-escaped, or the prefix match below would never hit them.
+
+    Why this exists: a generated map is committed, so it must not enumerate what the repo
+    deliberately keeps out — gitignored payload folders leak names (customer projects, exports)
+    into a public repo. Empty set if git is missing or this isn't a repo: mapping a bit too much
+    beats crashing."""
+    try:
+        r = subprocess.run(["git", "-c", "core.quotePath=false", "-C", rroot, "ls-files",
+                            "--others", "--ignored", "--exclude-standard", "--directory"],
+                           capture_output=True, text=True)
+    except OSError:
+        return set()
+    if r.returncode != 0:
+        return set()
+    return {ln.strip() for ln in r.stdout.splitlines() if ln.strip()}
+
+def walk(root, depth, rroot=None, ignored=frozenset()):
+    """Yield code/doc files within `depth` subfolder levels of root (depth 0 = root only),
+    skipping anything in `ignored` (see git_ignored)."""
     root = os.path.abspath(root)
+    rroot = os.path.abspath(rroot or root)
     base_depth = root.rstrip(os.sep).count(os.sep)
+
+    def rel(p):
+        return os.path.relpath(p, rroot).replace(os.sep, "/")
+
     for cur, dirs, files in os.walk(root):
         dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and not d.startswith("."))
+        if ignored:
+            # Pruning at the first ignored level is enough: os.walk is top-down, so its children
+            # (which git collapsed into that one entry) are never visited.
+            dirs[:] = [d for d in dirs if rel(os.path.join(cur, d)) + "/" not in ignored]
         if cur.count(os.sep) - base_depth > depth:
             dirs[:] = []
             continue
         for f in sorted(files):
+            if ignored and rel(os.path.join(cur, f)) in ignored:
+                continue  # ignored file sitting in a tracked folder
             if f in (MAP_NAME, CACHE_NAME) or f.startswith("."):
                 continue  # generated maps, the cache, and dotfiles are not source
             if HASHFILE.match(f):
@@ -334,7 +408,8 @@ def run_folder(root, rroot, args):
     # The root tree is meant to be the COMPLETE universal index, so a global run ignores --depth
     # (a deep menu tree must not be silently truncated). Subfolder runs still honor --depth.
     eff_depth = 10**6 if is_global else args.depth
-    files = list(walk(root, eff_depth))
+    ignored = set() if args.include_ignored else git_ignored(rroot)
+    files = list(walk(root, eff_depth, rroot, ignored))
     refreshed = skipped = 0
     seen = set()  # code rels processed this run — used to prune dead cache entries below
     entries = []  # (relpath, n_lines, [(line, label), ...], descriptor)
@@ -558,7 +633,7 @@ def install_hook(rroot):
     body = (
         "#!/bin/sh\n"
         f"{HOOK_MARK} (auto-generated; delete this file to uninstall)\n"
-        "staged=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\\.(py|jsx?|tsx?|ps1)$')\n"
+        "staged=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\\.(py|jsx?|tsx?|ps1|cs)$')\n"
         "[ -z \"$staged\" ] && exit 0\n"
         f"echo \"$staged\" | tr '\\n' '\\0' | xargs -0 python \"{me}\" --auto || exit 1\n"
         "echo \"$staged\" | tr '\\n' '\\0' | xargs -0 git add\n")
@@ -583,6 +658,9 @@ def main():
                     help="[folder] skip files with more than N lines (generated/huge; default 8000)")
     ap.add_argument("--map-only", action="store_true", help="[folder] only (re)build __navi__.md, no headers")
     ap.add_argument("--no-map", action="store_true", help="[folder] only refresh headers, no __navi__.md")
+    ap.add_argument("--include-ignored", action="store_true",
+                    help="[folder] also map gitignored paths (default: skip them, so a committed "
+                         "map can't leak the contents of folders the repo keeps out)")
     ap.add_argument("--install-hook", action="store_true",
                     help="install a git pre-commit hook that auto-refreshes headers on staged files")
     ap.add_argument("--auto", action="store_true",
