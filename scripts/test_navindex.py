@@ -57,6 +57,8 @@ CS = (
     "                {\n"
     "                    case \"list-blocks\":\n"
     "                        return null;\n"
+    "                    case \"BOOL\":\n"
+    "                        return null;\n"
     "                }\n"
     "            }\n"
     "            if (args.Length > 0) return null;\n"
@@ -81,8 +83,9 @@ def main():
     cs = labels(CS, ".cs")
     assert cs == ["class Runner", "dispatch", ".Name", ".Runner", ".Run",
                   'case "list-blocks"', ".Total"], cs
-    # statements are never members, and `= new Regex(` is a field, not a method
-    for bad in (".if", ".foreach", ".switch", ".return", ".Regex", ".Rx"):
+    # statements are never members, `= new Regex(` is a field, and a switch over data
+    # values (`case "BOOL"`) is not a dispatch target
+    for bad in (".if", ".foreach", ".switch", ".return", ".Regex", ".Rx", 'case "BOOL"'):
         assert bad not in cs, bad
     assert nv.comment_token("x.cs") == "//"
 

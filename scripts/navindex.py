@@ -28,48 +28,49 @@ files already carrying a header or at/above --threshold — what the pre-commit 
 """
 # ====================== BEGIN NAV INDEX ======================
 # NAV INDEX — auto-generated symbol map (refresh via the navindex skill)
-#   L77    TOP
-#   L79    per-file core
-#   L81    comment_token
-#   L84    file_eol
-#   L96    JS_KW
-#   L99    CS_KW
-#   L100   CS_MOD
-#   L106   CS_TYPE
-#   L107   CS_METHOD
-#   L108   CS_PROP
-#   L109   CS_CASE
-#   L111   symbols
-#   L195   docstring_end
-#   L215   strip_old
-#   L242   build
-#   L284   folder driver
-#   L286   CODE_EXT
-#   L287   SKIP_DIRS
-#   L291   CACHE_VER
-#   L292   HASHFILE
-#   L293   MAX_LINES
-#   L294   DOC_EXT
-#   L296   MAP_NAME
-#   L297   CACHE_NAME
-#   L299   _is_vendor
-#   L303   find_repo_root
-#   L316   doc_descriptor
-#   L338   body_hash
-#   L349   git_ignored
-#   L369   walk
-#   L398   run_folder
-#   L503   _is_generated_map
-#   L513   cleanup_stale_maps
-#   L530   _is_detailed
-#   L537   write_map
-#   L570   write_tree
-#   L595   pre-commit hook
-#   L597   HOOK_MARK
-#   L599   _wants_header
-#   L610   install_hook
-#   L645   entrypoint
-#   L647   main
+#   L78    TOP
+#   L80    per-file core
+#   L82    comment_token
+#   L85    file_eol
+#   L97    JS_KW
+#   L100   CS_KW
+#   L101   CS_MOD
+#   L107   CS_TYPE
+#   L108   CS_METHOD
+#   L109   CS_PROP
+#   L110   CS_CASE
+#   L119   CS_CASE_VERB
+#   L121   symbols
+#   L205   docstring_end
+#   L225   strip_old
+#   L252   build
+#   L294   folder driver
+#   L296   CODE_EXT
+#   L297   SKIP_DIRS
+#   L301   CACHE_VER
+#   L302   HASHFILE
+#   L303   MAX_LINES
+#   L304   DOC_EXT
+#   L306   MAP_NAME
+#   L307   CACHE_NAME
+#   L309   _is_vendor
+#   L313   find_repo_root
+#   L326   doc_descriptor
+#   L348   body_hash
+#   L359   git_ignored
+#   L379   walk
+#   L408   run_folder
+#   L513   _is_generated_map
+#   L523   cleanup_stale_maps
+#   L540   _is_detailed
+#   L547   write_map
+#   L580   write_tree
+#   L605   pre-commit hook
+#   L607   HOOK_MARK
+#   L609   _wants_header
+#   L620   install_hook
+#   L655   entrypoint
+#   L657   main
 # ======================= END NAV INDEX =======================
 
 import argparse, hashlib, json, os, re, subprocess, sys, datetime
@@ -107,6 +108,15 @@ CS_TYPE = re.compile(r"^\s*" + CS_MOD + r"*(class|struct|interface|enum|record)\
 CS_METHOD = re.compile(r"^\s*" + CS_MOD + r"+(?:[^()=]*?\s+)?(\w+)\s*(?:<[^<>()]*>)?\s*\(")
 CS_PROP = re.compile(r"^\s*" + CS_MOD + r"+(?:[^()=]*?\s+)?(\w+)\s*(?:\{\s*(?:get|set|init)\b|=>)")
 CS_CASE = re.compile(r'^\s*case\s+"([^"]+)":')  # string-literal dispatch (CLI verb tables)
+# Only all-lowercase literals index: a CLI verb is lowercase by universal convention
+# (`list-blocks`, `gen-profinet`), while a switch over data values carries capitals
+# (`case "Coil"`, `case "BOOL"`, `case "LEITURA_ALTA"`) and is not a navigation target.
+# Measured on a 10.7k-line C# CLI: keeps 77/77 real verbs, drops all 25 data cases.
+# ponytail: convention bet, not a parse — a repo dispatching on PascalCase literals
+# (`case "OrderPlaced":`, event routing) loses those from the index. Only the case
+# labels; methods/types are unaffected. Fix if it ever bites: also accept PascalCase
+# of 2+ words, which keeps single-word data values (`Coil`, `Move`, `Eq`) out.
+CS_CASE_VERB = re.compile(r"^[a-z][a-z0-9_-]*$")
 
 def symbols(lines, ext):
     out = []
@@ -154,7 +164,7 @@ def symbols(lines, ext):
                     (mm := CS_METHOD.match(s)) or (mm := CS_PROP.match(s))):
                 # ponytail: single-line signatures only — a param list spanning lines is missed
                 if mm.group(1) not in CS_KW: out.append((i, "." + mm.group(1)))
-            elif (mm := CS_CASE.match(s)):
+            elif (mm := CS_CASE.match(s)) and CS_CASE_VERB.match(mm.group(1)):
                 # `case "verb":` is the jump target in a CLI dispatch switch, wherever it is
                 # nested — so this one is NOT gated on the member indent.
                 out.append((i, f'case "{mm.group(1)}"'))
@@ -288,7 +298,7 @@ SKIP_DIRS = {"__pycache__", "node_modules", ".git", "dist", "build", ".venv", "v
              ".pytest_cache", ".mypy_cache", "migrations", "alembic", "assets", "vendor",
              "volumes",   # 'volumes' = runtime bind-mount data (DB/redis/etc.) — never map
              "cache", ".cache"}  # generated tool caches (e.g. content-addressed AST dumps)
-CACHE_VER = 5  # bump when symbol extraction changes, to invalidate stale cached symbol lists
+CACHE_VER = 6  # bump when symbol extraction changes, to invalidate stale cached symbol lists
 HASHFILE = re.compile(r"^[0-9a-f]{32,}\.")  # content-addressed cache artifacts (sha-named blobs)
 MAX_LINES = 8000  # default upper cap; overridable via --max-lines
 DOC_EXT = {".md", ".json", ".html", ".htm", ".css", ".sql", ".yml", ".yaml",
