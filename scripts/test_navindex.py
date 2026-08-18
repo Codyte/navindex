@@ -121,6 +121,9 @@ def main():
     assert nv.doc_symbols(MD.splitlines(keepends=True), ".md") == [
         (1, "Audit map"), (3, "Findings"), (8, "Actions"), (9, "C#")]
     assert nv.doc_symbols(MD.splitlines(keepends=True), ".json") == []
+    assert nv.comment_token("notes.md") == "<!--"
+    for name in ("README.md", "CONTRIBUTING.md", "LICENSE", "LICENSE.md", "SECURITY.md"):
+        assert nv.header_exempt(name), name
 
     with tempfile.TemporaryDirectory() as d:
         # EOL preservation: LF stays LF, CRLF stays CRLF, across a header build
@@ -180,6 +183,36 @@ def main():
         if gofmt := shutil.which("gofmt"):
             subprocess.run([gofmt, "-w", go_path], check=True)
 
+        # Markdown owns its outline: the folder map only points to this hidden header range.
+        md_path = os.path.join(d, "audit.md")
+        open(md_path, "w", newline="\n").write(MD)
+        nv.build(md_path)
+        md_before = open(md_path, "rb").read()
+        nv.build(md_path)
+        assert open(md_path, "rb").read() == md_before
+        md_lines = open(md_path, encoding="utf-8").read().splitlines()
+        assert nv.nav_header_range(md_lines, "<!--") == "NAV L1-L7"
+        header = "\n".join(md_lines[:7])
+        assert "Audit map" in header and "Actions" in header
+        assert "Not a real section" not in header
+        assert md_lines[8] == "# Audit map"
+        assert nv._wants_header(md_path, 300)
+
+        # YAML front matter must remain first; the NAV header starts after it and its blank line.
+        front = os.path.join(d, "skill.md")
+        open(front, "w", newline="\n").write("---\nname: demo\n---\n\n# Front\n")
+        nv.build(front)
+        front_lines = open(front, encoding="utf-8").read().splitlines()
+        assert front_lines[:4] == ["---", "name: demo", "---", ""]
+        assert nv.nav_header_range(front_lines, "<!--") == "NAV L5-L8"
+        assert front_lines[9] == "# Front"
+
+        # Public repository documents are explicit exceptions, even in direct file mode.
+        security = os.path.join(d, "SECURITY.md")
+        open(security, "w", newline="\n").write("# Security\n")
+        nv.build(security)
+        assert "BEGIN NAV INDEX" not in open(security, encoding="utf-8").read()
+
     with tempfile.TemporaryDirectory() as d:
         # gitignored paths stay out of the walk (and --include-ignored puts them back)
         run = lambda *a: subprocess.run(["git", "-C", d, *a], capture_output=True)
@@ -195,20 +228,34 @@ def main():
         assert allf == {"keep.py", "secret.py", "payload/leak.py"}, allf
 
     with tempfile.TemporaryDirectory() as d:
-        # Folder mode is stable and exposes real Markdown headings, not fenced examples.
+        # Folder mode is stable; Markdown headings stay in-file, not in the folder map.
         repo = os.path.join(d, "repo")
         pkg = os.path.join(repo, "pkg")
         os.makedirs(os.path.join(repo, ".git"))
         os.makedirs(pkg)
         open(os.path.join(pkg, "demo.go"), "w", newline="\n").write(GO)
         open(os.path.join(pkg, "audit.md"), "w", newline="\n").write(MD)
+        old = ("# ====================== BEGIN NAV INDEX ======================\n"
+               "# NAV INDEX — old\n"
+               "#   L6     Public\n"
+               "# ======================= END NAV INDEX =======================\n\n"
+               "# Public\n")
+        readme = os.path.join(repo, "README.md")
+        open(readme, "w", encoding="utf-8", newline="\n").write(old)
+        open(os.path.join(repo, "LICENSE"), "w", newline="\n").write("MIT\n")
+        assert nv._wants_header(readme, 300)  # cleanup of an old generated header
         args = SimpleNamespace(depth=6, threshold=1, min_lines=0, max_lines=8000,
                                map_only=False, no_map=False, include_ignored=False)
         nv.run_folder(repo, repo, args)
         first_tree = open(os.path.join(repo, nv.MAP_NAME), "rb").read()
         first_map = open(os.path.join(pkg, nv.MAP_NAME), "rb").read()
-        assert b"L1:Audit map" in first_map and b"L8:Actions" in first_map
-        assert b"Not a real section" not in first_map
+        assert b"audit.md** (17 ln) \xe2\x80\x94 NAV L1-L7" in first_map
+        assert b"Audit map" not in first_map and b"Actions" not in first_map
+        assert b"audit.md(17; NAV L1-L7)" in first_tree
+        assert b"README.md(1)" in first_tree and b"LICENSE(1)" in first_tree
+        assert b"README.md(1; NAV" not in first_tree
+        assert open(readme, encoding="utf-8").read() == "# Public\n"
+        assert not nv._wants_header(readme, 300)
         nv.run_folder(repo, repo, args)
         assert open(os.path.join(repo, nv.MAP_NAME), "rb").read() == first_tree
         assert open(os.path.join(pkg, nv.MAP_NAME), "rb").read() == first_map

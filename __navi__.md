@@ -1,16 +1,16 @@
-# __navi__ · repo tree — 7 files in 4 folders
+# __navi__ · repo tree — 8 files in 4 folders
 <!-- navindex · 2026-08-18 · DO NOT EDIT BY HAND; regen via navindex skill -->
 
-Universal index: every folder below -> the files it holds (names only). A `→ __navi__.md` marker means that folder has a symbol map — open `<that path>/__navi__.md` for exact line numbers (2 reads total: this tree -> folder map).
+Universal index: every folder below -> filenames; Markdown adds only its in-file NAV range. A `→ __navi__.md` marker means that folder has a detailed code map — open `<that path>/__navi__.md` for exact symbol lines.
 
-## `./` (3 files) → __navi__.md
-BENCHMARK.md(231)  README.md(94)  SKILL.md(147)
+## `./` (4 files)
+BENCHMARK.md(244; NAV L1-L12)  LICENSE(21)  README.md(95)  SKILL.md(159; NAV L16-L25)
 
 ## `evals/` (1 files)
-evals.json(53)
+evals.json(59)
 
-## `references/` (1 files) → __navi__.md
-internals.md(133)
+## `references/` (1 files)
+internals.md(151; NAV L1-L11)
 
 ## `scripts/` (2 files) → __navi__.md
-navindex.py(755)  test_navindex.py(219)
+navindex.py(800)  test_navindex.py(266)

@@ -48,6 +48,12 @@
       "prompt": "Esse projeto Go tem tipos, funções e métodos espalhados por cmd/ e internal/. Atualiza o navindex sem quebrar build tags nem comentários de pacote.",
       "expected_output": "Runs folder mode from the Go repository root; maps include .go files with type, function, and Receiver.Method symbols, generated headers use // comments after the package clause, build constraints/package docs stay intact, and go test ./... still passes.",
       "files": ["fixture Go repo with build constraints, package docs, generic types, functions, and pointer/value receiver methods"]
+    },
+    {
+      "id": 9,
+      "prompt": "Os títulos dos Markdown estão poluindo o __navi__.md. Deixa o índice dentro de cada .md e no mapa mostra só onde ler esse cabeçalho.",
+      "expected_output": "Each non-exempt Markdown file receives an idempotent hidden NAV header containing its #/## outline (after YAML front matter when present); folder/root maps show only the header line range and never duplicate headings or text descriptors. README, CONTRIBUTING, LICENSE and SECURITY remain header-free.",
+      "files": ["fixture repo with Markdown files, fenced headings, YAML front matter, and code files in the same folder"]
     }
   ]
 }

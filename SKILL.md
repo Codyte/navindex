@@ -2,16 +2,27 @@
 name: navindex
 description: >-
   Generate and consult NAV INDEX navigation aids for a codebase: a compact line-range symbol
-  header at the top of large source files, and a __navi__.md outline map per folder. Use this
-  skill whenever you (1) finish substantially editing or creating a source file — refresh its
+  header at the top of large source and Markdown files, and a __navi__.md outline map per folder. Use this
+  skill whenever you (1) finish substantially editing or creating an indexed file — refresh its
   header so its line numbers stay accurate; (2) add, remove, move, or rename files or symbols in
   a folder — regenerate that folder's __navi__.md; or (3) are about to explore or broadly search
   an unfamiliar area of a large codebase — read that folder's __navi__.md FIRST to orient in a
   single read instead of grepping blindly. Strongly prefer this skill when working in big files
   (1000+ lines), navigating an unfamiliar module, answering "where is X defined", building or
   refreshing code outlines / folder maps, or keeping navigation indexes current after a refactor.
-  Works in any git repo for Python, JS/JSX/TS/TSX, Go, PowerShell, and C#, and maps Markdown headings.
+  Works in any git repo for Python, JS/JSX/TS/TSX, Go, PowerShell, C#, and Markdown.
 ---
+
+<!-- ====================== BEGIN NAV INDEX ====================== -->
+<!-- NAV INDEX — auto-generated symbol map (refresh via the navindex skill) -->
+<!--   L27    navindex — navigation indexes for large codebases -->
+<!--   L29    Why this exists -->
+<!--   L56    When to READ an index (do this first) -->
+<!--   L69    When to GENERATE / REFRESH -->
+<!--   L92    How to run -->
+<!--   L139   Proof / sanity check -->
+<!--   L147   Housekeeping -->
+<!-- ======================= END NAV INDEX ======================= -->
 
 # navindex — navigation indexes for large codebases
 
@@ -25,14 +36,14 @@ model**: the root tree tells you *which folder*, the folder map tells you *which
   it holds (names + line counts, NO symbols) and a clickable pointer to that folder's own map. One
   read shows the whole repo layout and which folder map to open next. Written only on a repo-root
   run.
-- **Folder map (`__navi__.md`, one per *substantial* folder)** — lists that folder's code files →
-  their symbol outline, Markdown files → `#`/`##` headings, and other docs → a one-line descriptor,
-  all with exact line numbers where applicable, plus a breadcrumb back up to the root tree. Folders of trivial
+- **Folder map (`__navi__.md`, one per *substantial* folder)** — lists code files with their symbol
+  outline; Markdown only with the line range of its in-file NAV header; other text only by name/size.
+  It never duplicates document headings. A breadcrumb points back to the root tree. Folders of trivial
   stubs (no extracted symbols and nothing past `--threshold`) get **no** map — they're listed in the
   root tree instead, and any stale map left behind by a prior run is auto-deleted. This keeps deep,
   narrow trees (e.g. one tiny `main.ps1` per leaf) from spawning hundreds of near-empty maps.
-- **In-file header** — a comment block at the very top of a large source file mapping
-  `line number → symbol` (functions, classes, decorators, route handlers, section banners). An
+- **In-file header** — a comment block at the top of a large source file, or after Markdown YAML
+  front matter, mapping `line number → symbol/heading`. An
   agent that reads only the first ~40 lines instantly knows where everything is.
 
 To find a function deep in the tree: read the **root tree** (locate its folder) → read that
@@ -59,22 +70,22 @@ If a `__navi__.md` looks out of date (line numbers don't match, files missing), 
 
 Regenerate right after the code structure changes, so the index stays trustworthy:
 
-- **After substantially editing or creating a source file** → refresh that file's header so its
+- **After substantially editing or creating a source or Markdown file** → refresh its header so its
   line numbers are correct again. Small edits that don't move symbols don't need it; anything that
   shifts where functions live does.
 - **After structural changes in a folder** (added / removed / moved files, renamed symbols, a big
   refactor) → regenerate that folder's `__navi__.md` (this also refreshes headers on large files
   in one pass).
 
-By convention, a substantially edited or newly created source file should carry a NAV INDEX
-header, and each large area should have a current `__navi__.md`.
+By convention, a substantially edited/created source file and every Markdown file should carry a
+NAV INDEX header, and each large area should have a current `__navi__.md`.
 
 **Or stop remembering: install the pre-commit hook once per repo** —
 ```
 python <skill>/scripts/navindex.py --install-hook
 ```
-Every commit then auto-refreshes headers on the staged source files (only files that already
-carry a header or are at/above `--threshold`) and re-stages them, so committed headers can never
+Every commit then auto-refreshes headers on staged source/Markdown files (code only when already
+headered or at/above `--threshold`; Markdown always) and re-stages them, so committed headers cannot
 go stale. Delete `.git/hooks/pre-commit` to uninstall; a foreign pre-commit hook is never
 overwritten. Folder maps still need a manual folder run after structural changes.
 
@@ -92,7 +103,8 @@ where it writes its cache and computes paths. Invoke by the script's path inside
 python <skill>/scripts/navindex.py path/to/file.py [more.py ...]
 ```
 Supported code: `.py`, `.js`, `.jsx`, `.ts`, `.tsx`, `.go`, `.ps1`, `.cs`.
-Folder maps also index level-1 and level-2 headings from `.md`; Markdown files are never rewritten.
+Markdown `.md` receives a hidden HTML-comment header for `#`/`##`; maps show only its NAV range.
+`README.md`, `CONTRIBUTING.md`, `LICENSE`/`LICENSE.md`, and `SECURITY.md` are always header-exempt.
 
 **Refresh a whole folder** — pass a directory; regenerates `__navi__.md` and refreshes headers on
 large files in one pass:
@@ -116,8 +128,8 @@ Flags (folder mode only; ignored in file mode):
 | `--auto` | off | file mode: only touch files already carrying a header or at/above `--threshold` — what the hook passes |
 
 The three line-count gates work together: a file is **considered** only when `--min-lines ≤ its
-length ≤ --max-lines`; among considered code files, those at/above `--threshold` also get an
-in-file header. (File mode — passing a path explicitly — always builds the header, ignoring these
+length ≤ --max-lines`; considered Markdown always gets a header, while code needs `--threshold`.
+(File mode — passing a path explicitly — always builds the header, ignoring these
 gates, because you asked for that file by name.)
 
 Folder mode is **cache-aware**: it stores a body-hash of each file in

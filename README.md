@@ -1,11 +1,11 @@
 # navindex
 
 Navigation indexes for large codebases — a compact `line → symbol` header at the top of big
-source files, plus a `__navi__.md` outline map per folder. Read the top of a file (or one folder
+source and Markdown files, plus a `__navi__.md` outline map per folder. Read a file header (or folder
 map) and you know where every function lives, without opening the whole file or grepping blindly.
 
 One dependency-free Python script does both jobs. Works in any git repo for Python, JS/JSX/TS/TSX,
-Go, PowerShell and C#, and maps major Markdown headings. Ships as a
+Go, PowerShell, C# and Markdown. Ships as a
 [Claude Code](https://claude.com/claude-code) skill (`SKILL.md`); the script runs standalone too.
 
 ## What it produces
@@ -13,8 +13,9 @@ Go, PowerShell and C#, and maps major Markdown headings. Ships as a
 - **In-file header** — a comment block at the very top of a large file mapping each line number to
   the symbol there (functions, classes and their methods, TS interfaces/types/enums, route
   handlers, section banners). Read the first ~40 lines, jump straight to what you need.
-- **Folder map (`__navi__.md`)** — per substantial folder: every code file → its symbol outline,
-  Markdown → its `#`/`##` headings, other docs → a one-line descriptor, and a breadcrumb to the root.
+- **Folder map (`__navi__.md`)** — code files show their symbol outline; Markdown shows only the
+  line range of its own NAV header; other text files show only name/size. No duplicated doc outline.
+- **Public-doc exceptions** — `README`, `CONTRIBUTING`, `LICENSE` and `SECURITY` stay header-free.
 - **Root tree (`__navi__.md` at the repo root)** — every folder → the files it holds and a pointer
   to that folder's map. One read shows the whole layout.
 
@@ -35,7 +36,7 @@ Refresh one or more files' headers (any size, idempotent):
 python scripts/navindex.py path/to/file.py [more.ts ...]
 ```
 
-Map a folder — rebuilds its `__navi__.md` and refreshes headers on large files in one pass:
+Map a folder — rebuilds its `__navi__.md`, refreshes large code headers and all Markdown headers:
 
 ```
 python scripts/navindex.py backend/src --depth 4

@@ -28,61 +28,75 @@ files already carrying a header or at/above --threshold — what the pre-commit 
 """
 # ====================== BEGIN NAV INDEX ======================
 # NAV INDEX — auto-generated symbol map (refresh via the navindex skill)
-#   L80    TOP
-#   L82    per-file core
-#   L84    comment_token
-#   L87    file_eol
-#   L99    JS_KW
-#   L102   _go_receiver_name
-#   L107   CS_KW
-#   L108   CS_MOD
-#   L114   CS_TYPE
-#   L115   CS_METHOD
-#   L116   CS_PROP
-#   L117   CS_CASE
-#   L126   CS_CASE_VERB
-#   L128   symbols
-#   L226   docstring_end
-#   L253   strip_old
-#   L280   build
-#   L322   folder driver
-#   L324   CODE_EXT
-#   L325   SKIP_DIRS
-#   L329   CACHE_VER
-#   L330   HASHFILE
-#   L331   MAX_LINES
-#   L332   DOC_EXT
-#   L334   MAP_NAME
-#   L335   CACHE_NAME
-#   L337   _is_vendor
-#   L341   find_repo_root
-#   L354   doc_descriptor
-#   L376   doc_symbols
-#   L392   body_hash
-#   L403   git_ignored
-#   L423   walk
-#   L452   run_folder
-#   L558   _is_generated_map
-#   L568   cleanup_stale_maps
-#   L585   _is_detailed
-#   L592   write_map
-#   L625   write_tree
-#   L650   pre-commit hook
-#   L652   HOOK_MARK
-#   L654   _wants_header
-#   L665   install_hook
-#   L700   entrypoint
-#   L702   main
+#   L84    TOP
+#   L85    HEADER_EXEMPT_DOCS
+#   L88    per-file core
+#   L90    comment_token
+#   L95    header_exempt
+#   L98    comment_line
+#   L101   file_eol
+#   L113   JS_KW
+#   L116   _go_receiver_name
+#   L121   CS_KW
+#   L122   CS_MOD
+#   L128   CS_TYPE
+#   L129   CS_METHOD
+#   L130   CS_PROP
+#   L131   CS_CASE
+#   L140   CS_CASE_VERB
+#   L142   symbols
+#   L242   docstring_end
+#   L275   strip_old
+#   L302   strip_headers
+#   L314   nav_header_range
+#   L325   build
+#   L375   folder driver
+#   L377   CODE_EXT
+#   L378   SKIP_DIRS
+#   L382   CACHE_VER
+#   L383   HASHFILE
+#   L384   MAX_LINES
+#   L385   DOC_EXT
+#   L387   MAP_NAME
+#   L388   CACHE_NAME
+#   L390   _is_vendor
+#   L394   find_repo_root
+#   L407   doc_symbols
+#   L423   body_hash
+#   L434   git_ignored
+#   L454   walk
+#   L484   run_folder
+#   L601   _is_generated_map
+#   L611   cleanup_stale_maps
+#   L628   _is_detailed
+#   L635   write_map
+#   L666   write_tree
+#   L692   pre-commit hook
+#   L694   HOOK_MARK
+#   L696   _wants_header
+#   L710   install_hook
+#   L745   entrypoint
+#   L747   main
 # ======================= END NAV INDEX =======================
 
 import argparse, hashlib, json, os, re, subprocess, sys, datetime
 
 TOP = "NAV INDEX — auto-generated symbol map (refresh via the navindex skill)"
+HEADER_EXEMPT_DOCS = frozenset({"readme.md", "contributing.md", "license", "license.md",
+                                "security.md"})
 
 # ---------------------------------------------------------------- per-file core
 
 def comment_token(path):
-    return "//" if os.path.splitext(path)[1] in (".js", ".jsx", ".ts", ".tsx", ".go", ".cs") else "#"
+    if os.path.splitext(path)[1].lower() == ".md":
+        return "<!--"
+    return "//" if os.path.splitext(path)[1].lower() in (".js", ".jsx", ".ts", ".tsx", ".go", ".cs") else "#"
+
+def header_exempt(path):
+    return os.path.basename(path).lower() in HEADER_EXEMPT_DOCS
+
+def comment_line(tok, body):
+    return f"<!-- {body} -->\n" if tok == "<!--" else f"{tok} {body}\n"
 
 def file_eol(path):
     """'\\r\\n' if the file's first line break is CRLF, else '\\n'. Rewrites must keep the
@@ -126,6 +140,8 @@ CS_CASE = re.compile(r'^\s*case\s+"([^"]+)":')  # string-literal dispatch (CLI v
 CS_CASE_VERB = re.compile(r"^[a-z][a-z0-9_-]*$")
 
 def symbols(lines, ext):
+    if ext == ".md":
+        return doc_symbols(lines, ext)
     out = []
     in_class = False   # inside a top-level class body → members index as ".name"
     m_indent = None    # member indent = indent of the FIRST non-blank line after `class`;
@@ -227,6 +243,12 @@ def docstring_end(lines, ext):
     """Index (0-based) right after a leading module docstring / banner comment."""
     i = 0
     if lines and lines[0].startswith("#!"): i = 1
+    if ext == ".md" and lines and lines[0].strip() == "---":
+        for j in range(1, len(lines)):
+            if lines[j].strip() == "---":
+                end = j + 1
+                return end + 1 if end < len(lines) and not lines[end].strip() else end
+        return 0
     if ext == ".go":
         # Build constraints and package documentation must stay before `package`; inserting the
         # header after the package clause preserves both Go semantics and godoc association.
@@ -277,13 +299,36 @@ def strip_old(lines, tok):
         del lines[start:end + 1]
         if start < len(lines) and lines[start].strip() == "": del lines[start]
 
+def strip_headers(lines, path):
+    """Remove current and legacy NAV blocks for a file.
+
+    Markdown used ``#`` before gaining hidden HTML-comment headers, so refreshes must clean both
+    forms. The marker text is navindex-specific, avoiding accidental removal of ordinary headings.
+    """
+    tokens = ("<!--", "#") if os.path.splitext(path)[1].lower() == ".md" else (comment_token(path),)
+    out = list(lines)
+    for tok in tokens:
+        out = strip_old(out, tok)
+    return out
+
+def nav_header_range(lines, tok):
+    start = end = None
+    for i, line in enumerate(lines, 1):
+        body = line[len(tok):].lstrip() if line.startswith(tok) else ""
+        if body.startswith("=") and "BEGIN NAV INDEX" in line:
+            start = i
+        if start and body.startswith("=") and "END NAV INDEX" in line:
+            end = i
+            break
+    return f"NAV L{start}-L{end}" if start and end else "NAV missing"
+
 def build(path, lines=None):
     """Insert/refresh the NAV INDEX header on a single file. Idempotent.
 
     `lines` may be passed (raw readlines, header still present) to avoid re-reading
     when the caller already holds the buffer. Returns (ok, out_lines): ok=False and
     out_lines=[] if the file isn't decodable as utf-8 (skip, don't crash the run)."""
-    ext = os.path.splitext(path)[1]
+    ext = os.path.splitext(path)[1].lower()
     tok = comment_token(path)
     if lines is None:
         try:
@@ -301,15 +346,23 @@ def build(path, lines=None):
         had_bom = False
     if lines and lines[0].startswith("﻿"):  # caller read without -sig
         lines[0] = lines[0][1:]
-    lines = strip_old(list(lines), tok)
+    if header_exempt(path):
+        out = strip_headers(lines, path)
+        if out != lines:
+            with open(path, "w", encoding="utf-8-sig" if had_bom else "utf-8",
+                      newline=file_eol(path)) as f:
+                f.writelines(out)
+        print(f"navindex: {os.path.basename(path)} (header-exempt)")
+        return (True, out)
+    lines = strip_headers(lines, path)
     ins = docstring_end(lines, ext)
     syms = [(n, lbl) for (n, lbl) in symbols(lines, ext) if n - 1 >= ins and "NAV INDEX" not in lbl]
-    block = [tok + " " + "=" * 22 + " BEGIN NAV INDEX " + "=" * 22 + "\n",
-             tok + " " + TOP + "\n"]
+    block = [comment_line(tok, "=" * 22 + " BEGIN NAV INDEX " + "=" * 22),
+             comment_line(tok, TOP)]
     height = len(syms) + 4  # 2 header (begin+title) + each sym + 1 end + 1 trailing blank
     for n, lbl in syms:
-        block.append(f"{tok}   L{n + height:<5} {lbl}\n")
-    block.append(tok + " " + "=" * 23 + " END NAV INDEX " + "=" * 23 + "\n")
+        block.append(comment_line(tok, f"  L{n + height:<5} {lbl}"))
+    block.append(comment_line(tok, "=" * 23 + " END NAV INDEX " + "=" * 23))
     block.append("\n")
     assert len(block) == height, f"height mismatch {len(block)} vs {height}"
     out = lines[:ins] + block + lines[ins:]
@@ -326,7 +379,7 @@ SKIP_DIRS = {"__pycache__", "node_modules", ".git", "dist", "build", ".venv", "v
              ".pytest_cache", ".mypy_cache", "migrations", "alembic", "assets", "vendor",
              "volumes",   # 'volumes' = runtime bind-mount data (DB/redis/etc.) — never map
              "cache", ".cache"}  # generated tool caches (e.g. content-addressed AST dumps)
-CACHE_VER = 7  # bump when symbol extraction changes, to invalidate stale cached symbol lists
+CACHE_VER = 8  # bump when symbol/header extraction changes, to invalidate stale cached lists
 HASHFILE = re.compile(r"^[0-9a-f]{32,}\.")  # content-addressed cache artifacts (sha-named blobs)
 MAX_LINES = 8000  # default upper cap; overridable via --max-lines
 DOC_EXT = {".md", ".json", ".html", ".htm", ".css", ".sql", ".yml", ".yaml",
@@ -351,30 +404,8 @@ def find_repo_root(start=None):
             return base
         cur = parent
 
-def doc_descriptor(path, ext):
-    """One-line descriptor for non-code files so they're still useful in the map."""
-    try:
-        if ext == ".md":
-            for line in open(path, encoding="utf-8", errors="ignore"):
-                s = line.strip()
-                if s.startswith("#"):
-                    return s.lstrip("# ").strip()[:90]
-            return ""
-        if ext == ".json":
-            d = json.load(open(path, encoding="utf-8", errors="ignore"))
-            if isinstance(d, dict):
-                for k in ("name", "title", "id", "description"):
-                    if k in d and isinstance(d[k], (str, int)):
-                        return f"{k}: {str(d[k])[:70]}"
-                return "keys: " + ", ".join(list(d.keys())[:8])
-            if isinstance(d, list):
-                return f"[{len(d)} items]"
-    except Exception:
-        return ""
-    return ""
-
 def doc_symbols(lines, ext):
-    """Return major Markdown headings, ignoring fenced examples; other docs stay descriptor-only."""
+    """Return major Markdown headings for its in-file NAV header, ignoring fenced examples."""
     if ext != ".md":
         return []
     out, fence = [], None
@@ -397,7 +428,7 @@ def body_hash(path, lines=None):
             lines = open(path, encoding="utf-8-sig").readlines()
         except (UnicodeDecodeError, OSError):
             return None
-    lines = strip_old(list(lines), comment_token(path))
+    lines = strip_headers(lines, path)
     return hashlib.sha1("".join(lines).encode("utf-8")).hexdigest()
 
 def git_ignored(rroot):
@@ -446,7 +477,8 @@ def walk(root, depth, rroot=None, ignored=frozenset()):
                 continue  # generated maps, the cache, and dotfiles are not source
             if HASHFILE.match(f):
                 continue  # sha-named cache blob (e.g. <hash>.json) — generated junk, not source
-            if os.path.splitext(f)[1] in CODE_EXT or os.path.splitext(f)[1] in DOC_EXT:
+            if (os.path.splitext(f)[1].lower() in CODE_EXT or os.path.splitext(f)[1].lower() in DOC_EXT
+                    or f.lower() in HEADER_EXEMPT_DOCS):
                 yield os.path.join(cur, f)
 
 def run_folder(root, rroot, args):
@@ -466,15 +498,18 @@ def run_folder(root, rroot, args):
     files = list(walk(root, eff_depth, rroot, ignored))
     refreshed = skipped = 0
     seen = set()  # code rels processed this run — used to prune dead cache entries below
-    entries = []  # (relpath, n_lines, [(line, label), ...], descriptor)
+    entries = []  # (relpath, n_lines, [(line, label), ...], compact map note)
 
     def _clean_syms(lines, ext):
         return [(ln, lbl) for ln, lbl in symbols(lines, ext) if "NAV INDEX" not in lbl]
 
     for path in files:
         rel = os.path.relpath(path, rroot).replace(os.sep, "/")
-        ext = os.path.splitext(path)[1]
+        ext = os.path.splitext(path)[1].lower()
         is_code = ext in CODE_EXT
+        is_markdown = ext == ".md"
+        is_exempt = header_exempt(path)
+        is_indexed = is_code or (is_markdown and not is_exempt)
 
         # ---- one read per file (reused for line count, hash, symbols, header build) ----
         raw, decoded = None, True
@@ -483,7 +518,7 @@ def run_folder(root, rroot, args):
         except (UnicodeDecodeError, OSError):
             decoded = False
         if not decoded:
-            if is_code:  # can't index a non-utf-8 source — warn once, skip entirely
+            if is_indexed:  # can't safely rewrite a non-utf-8 indexed file
                 print(f"navindex: skip (not utf-8) {rel}", file=sys.stderr)
                 continue
             raw = open(path, encoding="utf-8", errors="ignore").readlines()  # docs: lossy ok
@@ -494,14 +529,15 @@ def run_folder(root, rroot, args):
         if _is_vendor(path) or n_lines > args.max_lines or n_lines < args.min_lines:
             continue
 
-        if is_code:
+        if is_indexed:
             seen.add(rel)
             h = body_hash(path, raw)
             cached = cache.get(rel)
             hit = isinstance(cached, dict) and cached.get("h") == h  # dict = new schema; str = stale
-            need_header = (not args.map_only) and n_lines >= args.threshold
+            need_header = (not args.map_only) and (is_markdown or n_lines >= args.threshold)
+            has_header = nav_header_range(raw, comment_token(path)) != "NAV missing"
 
-            if hit:
+            if hit and (not need_header or has_header):
                 syms = [tuple(x) for x in cached.get("s", [])]
                 if need_header:
                     skipped += 1
@@ -509,6 +545,7 @@ def run_folder(root, rroot, args):
                 if need_header:
                     ok, out = build(path, raw)
                     if ok:
+                        raw = out
                         n_lines = len(out)
                         syms = _clean_syms(out, ext)  # post-build buffer: line nums incl. header
                         refreshed += 1
@@ -519,10 +556,16 @@ def run_folder(root, rroot, args):
                 cache[rel] = {"h": h, "n": n_lines, "s": [[ln, lbl] for ln, lbl in syms]}
 
             if not args.no_map:
-                entries.append((rel, n_lines, syms, ""))
+                note = nav_header_range(raw, comment_token(path)) if is_markdown else ""
+                entries.append((rel, n_lines, [] if is_markdown else syms, note))
         else:
+            if is_exempt and not args.map_only and strip_headers(raw, path) != raw:
+                ok, out = build(path, raw)
+                if ok:
+                    raw, n_lines = out, len(out)
+                    refreshed += 1
             if not args.no_map:
-                entries.append((rel, n_lines, doc_symbols(raw, ext), doc_descriptor(path, ext)))
+                entries.append((rel, n_lines, [], ""))
 
     # prune dead cache entries (deleted/renamed files) so the cache can't grow without bound.
     # SCOPED: only entries under the folder we just walked are candidates for removal — a subfolder
@@ -590,8 +633,8 @@ def _is_detailed(items, args):
     return any(syms or n >= args.threshold for _, n, syms, _ in items)
 
 def write_map(root, rroot, args, entries):
-    """Write a __navi__.md only in directories that are 'detailed' (see _is_detailed): lists that
-    folder's files -> symbol outline with exact line numbers, plus a breadcrumb to the root tree.
+    """Write a __navi__.md only in directories that are 'detailed' (see _is_detailed): lists code
+    symbols and only the in-file NAV range for Markdown, plus a breadcrumb to the root tree.
     Returns the set of POSIX-relative dirs that got a map (so the tree can mark them)."""
     by_dir = {}
     for rel, n_lines, syms, desc in entries:
@@ -606,13 +649,11 @@ def write_map(root, rroot, args, entries):
         detailed.add(rel_dir)
         depth = 0 if rel_dir == "." else rel_dir.count("/") + 1
         up = ("../" * depth + MAP_NAME) if depth else None  # path back to the repo-root tree
-        out = [f"# __navi__ · `{rel_dir}/` — {len(items)} files → symbols at exact line numbers",
+        out = [f"# __navi__ · `{rel_dir}/` — {len(items)} files → code symbols / text NAV ranges",
                f"<!-- navindex · {datetime.date.today()} · DO NOT EDIT BY HAND; regen via navindex skill -->",
                *( [f"↑ repo tree: [`{up}`]({up})", ""] if up else [""] )]
         for rel, n_lines, syms, desc in sorted(items):
             fname = os.path.basename(rel)
-            # descriptor only for non-code docs; for code the <sub> line below already carries the
-            # symbols WITH line numbers, so repeating the first 6 names here is pure duplication.
             suffix = f" — {desc}" if desc else ""
             out.append(f"- **{fname}** ({n_lines} ln){suffix}")
             if syms:
@@ -623,27 +664,28 @@ def write_map(root, rroot, args, entries):
     return detailed
 
 def write_tree(rroot, args, entries, detailed):
-    """Root-level GLOBAL index: every folder below -> the files it holds (names + line counts, NO
-    symbols). The folder PATH is written ONCE per line; folders that have a detailed map carry a
+    """Root-level GLOBAL index: every folder below -> files and line counts; Markdown adds only its
+    in-file NAV range. The folder PATH is written ONCE; folders with a detailed code map carry a
     ' → __navi__.md' marker (open `<that path>/__navi__.md` for symbols). One read of this gives
     the whole layout; any symbol is then 2 reads away (this tree -> that folder's map)."""
     by_dir = {}
     for rel, n_lines, syms, desc in entries:
         d, _, name = rel.rpartition("/")  # d == "" for files directly in the repo root
-        by_dir.setdefault(d, []).append((name, n_lines))
+        by_dir.setdefault(d, []).append((name, n_lines, desc))
     nfiles = sum(len(v) for v in by_dir.values())
     out = [f"# __navi__ · repo tree — {nfiles} files in {len(by_dir)} folders",
            f"<!-- navindex · {datetime.date.today()} · DO NOT EDIT BY HAND; regen via navindex skill -->",
            "",
-           "Universal index: every folder below -> the files it holds (names only). A "
-           "`→ __navi__.md` marker means that folder has a symbol map — open `<that path>/"
-           "__navi__.md` for exact line numbers (2 reads total: this tree -> folder map).",
+           "Universal index: every folder below -> filenames; Markdown adds only its in-file NAV "
+           "range. A `→ __navi__.md` marker means that folder has a detailed code map — open "
+           "`<that path>/__navi__.md` for exact symbol lines.",
            ""]
     for d in sorted(by_dir):
         rel_dir = d or "."
         marker = " → __navi__.md" if rel_dir in detailed else ""
         out.append(f"## `{rel_dir}/` ({len(by_dir[d])} files){marker}")
-        out.append("  ".join(f"{name}({n})" for name, n in sorted(by_dir[d])))
+        out.append("  ".join(f"{name}({n}{'; ' + desc if desc else ''})"
+                            for name, n, desc in sorted(by_dir[d])))
         out.append("")
     open(os.path.join(rroot, MAP_NAME), "w", encoding="utf-8").write("\n".join(out).rstrip() + "\n")
 
@@ -660,7 +702,10 @@ def _wants_header(path, threshold):
     except (UnicodeDecodeError, OSError):
         return False
     # ponytail: header is searched in the first 50 lines — enough past any shebang/docstring
-    return len(lines) >= threshold or any("BEGIN NAV INDEX" in ln for ln in lines[:50])
+    has_header = any("BEGIN NAV INDEX" in ln for ln in lines[:50])
+    if header_exempt(path):
+        return has_header  # one cleanup pass if an older version inserted a header
+    return path.lower().endswith(".md") or len(lines) >= threshold or has_header
 
 def install_hook(rroot):
     """Write the repo's pre-commit hook: refresh headers on staged source files (--auto) and
@@ -688,7 +733,7 @@ def install_hook(rroot):
     body = (
         "#!/bin/sh\n"
         f"{HOOK_MARK} (auto-generated; delete this file to uninstall)\n"
-        "staged=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\\.(go|py|jsx?|tsx?|ps1|cs)$')\n"
+        "staged=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\\.(go|py|jsx?|tsx?|ps1|cs|md)$')\n"
         "[ -z \"$staged\" ] && exit 0\n"
         f"echo \"$staged\" | tr '\\n' '\\0' | xargs -0 python \"{me}\" --auto || exit 1\n"
         "echo \"$staged\" | tr '\\n' '\\0' | xargs -0 git add\n")
