@@ -1,5 +1,6 @@
 """Self-check for navindex.py — run: python scripts/test_navindex.py (exit 0 = ok)."""
-import os, subprocess, sys, tempfile
+import os, shutil, subprocess, sys, tempfile
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import navindex as nv
@@ -69,6 +70,31 @@ CS = (
     "}\n"
 )
 
+GO = (
+    "//go:build windows\n"
+    "\n"
+    "// Package demo exercises Go NAV INDEX generation.\n"
+    "package demo\n"
+    "\n"
+    "type Runner struct{}\n"
+    "type Pair[T any] struct { A, B T }\n"
+    "func NewRunner() *Runner { return &Runner{} }\n"
+    "func (r *Runner) Run() {}\n"
+    "func (p Pair[T]) Swap() Pair[T] { return Pair[T]{p.B, p.A} }\n"
+)
+
+MD = (
+    "# Audit map\n"
+    "text\n"
+    "## Findings\n"
+    "```md\n"
+    "## Not a real section\n"
+    "```\n"
+    "### Detail intentionally omitted\n"
+    "## Actions ##\n"
+    "## C#\n"
+)
+
 def labels(text, ext):
     return [lbl for _, lbl in nv.symbols(text.splitlines(keepends=True), ext)]
 
@@ -88,6 +114,13 @@ def main():
     for bad in (".if", ".foreach", ".switch", ".return", ".Regex", ".Rx", 'case "BOOL"'):
         assert bad not in cs, bad
     assert nv.comment_token("x.cs") == "//"
+    go = labels(GO, ".go")
+    assert go == ["type Runner", "type Pair", "NewRunner", "Runner.Run", "Pair.Swap"], go
+    assert nv.comment_token("main.go") == "//"
+    assert ".go" in nv.CODE_EXT
+    assert nv.doc_symbols(MD.splitlines(keepends=True), ".md") == [
+        (1, "Audit map"), (3, "Findings"), (8, "Actions"), (9, "C#")]
+    assert nv.doc_symbols(MD.splitlines(keepends=True), ".json") == []
 
     with tempfile.TemporaryDirectory() as d:
         # EOL preservation: LF stays LF, CRLF stays CRLF, across a header build
@@ -127,6 +160,26 @@ def main():
         nv.build(cs_path)
         assert open(cs_path, "rb").read() == first
 
+        # Go: preserve build constraints and package docs, then insert a valid // header after
+        # the package clause. gofmt is an optional stronger syntax check when available.
+        go_path = os.path.join(d, "demo.go")
+        open(go_path, "w", newline="\n").write(GO)
+        nv.build(go_path)
+        go_before = open(go_path, "rb").read()
+        nv.build(go_path)
+        assert open(go_path, "rb").read() == go_before
+        go_lines = open(go_path, encoding="utf-8").read().splitlines()
+        package_line = go_lines.index("package demo")
+        assert go_lines[0] == "//go:build windows"
+        assert go_lines[package_line - 1] == "// Package demo exercises Go NAV INDEX generation."
+        assert go_lines[package_line + 2].startswith("// ===")
+        for entry in [line for line in go_lines if line.startswith("//   L")]:
+            n, lbl = entry[6:].split(None, 1)
+            target = go_lines[int(n) - 1]
+            assert lbl.split(".")[-1].replace("type ", "") in target, (entry, target)
+        if gofmt := shutil.which("gofmt"):
+            subprocess.run([gofmt, "-w", go_path], check=True)
+
     with tempfile.TemporaryDirectory() as d:
         # gitignored paths stay out of the walk (and --include-ignored puts them back)
         run = lambda *a: subprocess.run(["git", "-C", d, *a], capture_output=True)
@@ -140,6 +193,25 @@ def main():
         assert got == {"keep.py"}, got
         allf = {os.path.relpath(p, d).replace(os.sep, "/") for p in nv.walk(d, 6, d)}
         assert allf == {"keep.py", "secret.py", "payload/leak.py"}, allf
+
+    with tempfile.TemporaryDirectory() as d:
+        # Folder mode is stable and exposes real Markdown headings, not fenced examples.
+        repo = os.path.join(d, "repo")
+        pkg = os.path.join(repo, "pkg")
+        os.makedirs(os.path.join(repo, ".git"))
+        os.makedirs(pkg)
+        open(os.path.join(pkg, "demo.go"), "w", newline="\n").write(GO)
+        open(os.path.join(pkg, "audit.md"), "w", newline="\n").write(MD)
+        args = SimpleNamespace(depth=6, threshold=1, min_lines=0, max_lines=8000,
+                               map_only=False, no_map=False, include_ignored=False)
+        nv.run_folder(repo, repo, args)
+        first_tree = open(os.path.join(repo, nv.MAP_NAME), "rb").read()
+        first_map = open(os.path.join(pkg, nv.MAP_NAME), "rb").read()
+        assert b"L1:Audit map" in first_map and b"L8:Actions" in first_map
+        assert b"Not a real section" not in first_map
+        nv.run_folder(repo, repo, args)
+        assert open(os.path.join(repo, nv.MAP_NAME), "rb").read() == first_tree
+        assert open(os.path.join(pkg, nv.MAP_NAME), "rb").read() == first_map
 
     print("test_navindex: all checks passed")
 

@@ -32,6 +32,12 @@ the class body. Deeper nesting (closures, inner classes) is intentionally skippe
 - bare `export default ...` → labeled "export default"
 - a `// ====` / `// ----` banner → its text
 
+**Go (`.go`)**
+- `type Name` declarations → `type Name`
+- `func Name(...)` declarations → `Name`, including generic functions
+- Methods → `Receiver.Name`; pointer and generic receiver syntax is normalized to the base type
+- a `// ====` / `// ----` banner → its text
+
 **C# (`.cs`)**
 - `class` / `struct` / `interface` / `enum` / `record` with any modifier prefix → `class Name`,
   `interface IName`, … A **nested** type is indexed but does not reset the member indent, so the
@@ -54,7 +60,7 @@ the class body. Deeper nesting (closures, inner classes) is intentionally skippe
 - a `param(` block → labeled "param()"
 - a `# ====` / `# ----` banner → its text
 
-Comment token is `//` for JS/TS and C# files, `#` for everything else.
+Comment token is `//` for JS/TS, Go and C# files, `#` for everything else.
 
 ## Gitignored paths
 
@@ -72,7 +78,8 @@ mapping everything.
 ## Where the header is inserted
 
 After any leading shebang (`#!...`) and module docstring / top block comment — so the docstring
-stays first. The block is delimited by `BEGIN NAV INDEX` / `END NAV INDEX` lines. On refresh, the
+stays first. For Go, build constraints and package documentation remain before `package`, and the
+header is inserted immediately after the package clause. The block is delimited by `BEGIN NAV INDEX` / `END NAV INDEX` lines. On refresh, the
 old block is stripped (plus one trailing blank line) and a fresh one inserted, which is what makes
 it idempotent. Line numbers in the header account for the header's own height, so they point at
 the real post-insertion lines.
@@ -84,7 +91,7 @@ repo (which would turn a 30-line header diff into a whole-file diff).
 ## Pre-commit hook (`--install-hook`)
 
 `--install-hook` writes `.git/hooks/pre-commit` (marker: `# navindex pre-commit hook`). On each
-commit it collects staged `.py/.js/.jsx/.ts/.tsx/.ps1/.cs` files, runs the script on them with
+commit it collects staged `.py/.js/.jsx/.ts/.tsx/.go/.ps1/.cs` files, runs the script on them with
 `--auto`, and re-stages them. `--auto` only touches files that already carry a header or are
 at/above `--threshold` — small headerless files pass through untouched, and a run where every
 file is skipped exits 0 so the commit proceeds. An existing pre-commit hook without the marker is
@@ -95,9 +102,10 @@ file.
 
 - Grouped by subdirectory; each file shown as `**name** (N ln) — head`, where `head` is a doc
   descriptor (for docs) or the first few symbols (for code).
-- Code files also get a `<sub>` line previewing up to 24 `Lnnn:symbol` pairs.
-- Doc descriptors: Markdown → first heading; JSON → `name`/`title`/`id`/`description` or top keys.
-- The map file lists both code (`.py .js .jsx .ts .tsx .ps1 .cs`) and docs (`.md .json .html .css
+- Code files and Markdown docs get a `<sub>` line previewing up to 24 `Lnnn:symbol` pairs.
+- Markdown symbols are ATX `#`/`##` headings outside fenced code blocks; its first heading is also
+  the descriptor. JSON descriptors use `name`/`title`/`id`/`description` or top keys.
+- The map file lists both code (`.py .js .jsx .ts .tsx .go .ps1 .cs`) and docs (`.md .json .html .css
   .sql .yml .yaml .txt .toml .ini .cfg .sh`). `.env` is never listed.
 
 ## Skip rules

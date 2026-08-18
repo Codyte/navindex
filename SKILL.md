@@ -10,7 +10,7 @@ description: >-
   single read instead of grepping blindly. Strongly prefer this skill when working in big files
   (1000+ lines), navigating an unfamiliar module, answering "where is X defined", building or
   refreshing code outlines / folder maps, or keeping navigation indexes current after a refactor.
-  Works in any git repo for Python, JS/JSX/TS/TSX, PowerShell, and C#.
+  Works in any git repo for Python, JS/JSX/TS/TSX, Go, PowerShell, and C#, and maps Markdown headings.
 ---
 
 # navindex — navigation indexes for large codebases
@@ -26,8 +26,8 @@ model**: the root tree tells you *which folder*, the folder map tells you *which
   read shows the whole repo layout and which folder map to open next. Written only on a repo-root
   run.
 - **Folder map (`__navi__.md`, one per *substantial* folder)** — lists that folder's code files →
-  their symbol outline (exact line numbers) and doc files → a one-line descriptor, plus a breadcrumb
-  back up to the root tree. One read gives the detailed view of an entire area. Folders of trivial
+  their symbol outline, Markdown files → `#`/`##` headings, and other docs → a one-line descriptor,
+  all with exact line numbers where applicable, plus a breadcrumb back up to the root tree. Folders of trivial
   stubs (no extracted symbols and nothing past `--threshold`) get **no** map — they're listed in the
   root tree instead, and any stale map left behind by a prior run is auto-deleted. This keeps deep,
   narrow trees (e.g. one tiny `main.ps1` per leaf) from spawning hundreds of near-empty maps.
@@ -91,7 +91,8 @@ where it writes its cache and computes paths. Invoke by the script's path inside
 ```
 python <skill>/scripts/navindex.py path/to/file.py [more.py ...]
 ```
-Supported code: `.py`, `.js`, `.jsx`, `.ts`, `.tsx`, `.ps1`, `.cs`.
+Supported code: `.py`, `.js`, `.jsx`, `.ts`, `.tsx`, `.go`, `.ps1`, `.cs`.
+Folder maps also index level-1 and level-2 headings from `.md`; Markdown files are never rewritten.
 
 **Refresh a whole folder** — pass a directory; regenerates `__navi__.md` and refreshes headers on
 large files in one pass:

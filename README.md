@@ -5,16 +5,16 @@ source files, plus a `__navi__.md` outline map per folder. Read the top of a fil
 map) and you know where every function lives, without opening the whole file or grepping blindly.
 
 One dependency-free Python script does both jobs. Works in any git repo for Python, JS/JSX/TS/TSX,
-PowerShell and C#. Ships as a [Claude Code](https://claude.com/claude-code) skill (`SKILL.md`), but the
-script runs standalone too.
+Go, PowerShell and C#, and maps major Markdown headings. Ships as a
+[Claude Code](https://claude.com/claude-code) skill (`SKILL.md`); the script runs standalone too.
 
 ## What it produces
 
 - **In-file header** — a comment block at the very top of a large file mapping each line number to
   the symbol there (functions, classes and their methods, TS interfaces/types/enums, route
   handlers, section banners). Read the first ~40 lines, jump straight to what you need.
-- **Folder map (`__navi__.md`)** — per substantial folder: every code file → its symbol outline
-  with exact line numbers, every doc file → a one-line descriptor, and a breadcrumb up to the root.
+- **Folder map (`__navi__.md`)** — per substantial folder: every code file → its symbol outline,
+  Markdown → its `#`/`##` headings, other docs → a one-line descriptor, and a breadcrumb to the root.
 - **Root tree (`__navi__.md` at the repo root)** — every folder → the files it holds and a pointer
   to that folder's map. One read shows the whole layout.
 

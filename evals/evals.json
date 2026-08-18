@@ -42,6 +42,12 @@
       "prompt": "Renomeei services/ para core/ e apaguei metade dos arquivos. Atualiza os índices e não deixa lixo pra trás.",
       "expected_output": "Re-runs folder mode from the repo root; the stale services/__navi__.md is auto-deleted (generated-map marker check), core/ gets a fresh map, and dead cache entries for removed files are pruned.",
       "files": ["fixture repo where services/ was renamed to core/ leaving an old generated __navi__.md behind"]
+    },
+    {
+      "id": 8,
+      "prompt": "Esse projeto Go tem tipos, funções e métodos espalhados por cmd/ e internal/. Atualiza o navindex sem quebrar build tags nem comentários de pacote.",
+      "expected_output": "Runs folder mode from the Go repository root; maps include .go files with type, function, and Receiver.Method symbols, generated headers use // comments after the package clause, build constraints/package docs stay intact, and go test ./... still passes.",
+      "files": ["fixture Go repo with build constraints, package docs, generic types, functions, and pointer/value receiver methods"]
     }
   ]
 }

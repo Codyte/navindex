@@ -10,7 +10,7 @@ Portable: the repo root is detected from the current working directory (nearest 
 it from inside the target repo.
 
 Idempotent: re-running rebuilds the header/map in place (the old block is stripped first), so it
-never stacks. Supported code: .py, .js/.jsx/.ts/.tsx, .ps1, .cs.
+never stacks. Supported code: .py, .js/.jsx/.ts/.tsx, .go, .ps1, .cs.
 
 Gitignored paths are skipped in a git repo (one `git ls-files` call per run) — a generated map
 must not leak the contents of folders the repo deliberately keeps out. `--include-ignored` opts out.
@@ -28,49 +28,51 @@ files already carrying a header or at/above --threshold — what the pre-commit 
 """
 # ====================== BEGIN NAV INDEX ======================
 # NAV INDEX — auto-generated symbol map (refresh via the navindex skill)
-#   L78    TOP
-#   L80    per-file core
-#   L82    comment_token
-#   L85    file_eol
-#   L97    JS_KW
-#   L100   CS_KW
-#   L101   CS_MOD
-#   L107   CS_TYPE
-#   L108   CS_METHOD
-#   L109   CS_PROP
-#   L110   CS_CASE
-#   L119   CS_CASE_VERB
-#   L121   symbols
-#   L205   docstring_end
-#   L225   strip_old
-#   L252   build
-#   L294   folder driver
-#   L296   CODE_EXT
-#   L297   SKIP_DIRS
-#   L301   CACHE_VER
-#   L302   HASHFILE
-#   L303   MAX_LINES
-#   L304   DOC_EXT
-#   L306   MAP_NAME
-#   L307   CACHE_NAME
-#   L309   _is_vendor
-#   L313   find_repo_root
-#   L326   doc_descriptor
-#   L348   body_hash
-#   L359   git_ignored
-#   L379   walk
-#   L408   run_folder
-#   L513   _is_generated_map
-#   L523   cleanup_stale_maps
-#   L540   _is_detailed
-#   L547   write_map
-#   L580   write_tree
-#   L605   pre-commit hook
-#   L607   HOOK_MARK
-#   L609   _wants_header
-#   L620   install_hook
-#   L655   entrypoint
-#   L657   main
+#   L80    TOP
+#   L82    per-file core
+#   L84    comment_token
+#   L87    file_eol
+#   L99    JS_KW
+#   L102   _go_receiver_name
+#   L107   CS_KW
+#   L108   CS_MOD
+#   L114   CS_TYPE
+#   L115   CS_METHOD
+#   L116   CS_PROP
+#   L117   CS_CASE
+#   L126   CS_CASE_VERB
+#   L128   symbols
+#   L226   docstring_end
+#   L253   strip_old
+#   L280   build
+#   L322   folder driver
+#   L324   CODE_EXT
+#   L325   SKIP_DIRS
+#   L329   CACHE_VER
+#   L330   HASHFILE
+#   L331   MAX_LINES
+#   L332   DOC_EXT
+#   L334   MAP_NAME
+#   L335   CACHE_NAME
+#   L337   _is_vendor
+#   L341   find_repo_root
+#   L354   doc_descriptor
+#   L376   doc_symbols
+#   L392   body_hash
+#   L403   git_ignored
+#   L423   walk
+#   L452   run_folder
+#   L558   _is_generated_map
+#   L568   cleanup_stale_maps
+#   L585   _is_detailed
+#   L592   write_map
+#   L625   write_tree
+#   L650   pre-commit hook
+#   L652   HOOK_MARK
+#   L654   _wants_header
+#   L665   install_hook
+#   L700   entrypoint
+#   L702   main
 # ======================= END NAV INDEX =======================
 
 import argparse, hashlib, json, os, re, subprocess, sys, datetime
@@ -80,7 +82,7 @@ TOP = "NAV INDEX — auto-generated symbol map (refresh via the navindex skill)"
 # ---------------------------------------------------------------- per-file core
 
 def comment_token(path):
-    return "//" if os.path.splitext(path)[1] in (".js", ".jsx", ".ts", ".tsx", ".cs") else "#"
+    return "//" if os.path.splitext(path)[1] in (".js", ".jsx", ".ts", ".tsx", ".go", ".cs") else "#"
 
 def file_eol(path):
     """'\\r\\n' if the file's first line break is CRLF, else '\\n'. Rewrites must keep the
@@ -96,6 +98,11 @@ def file_eol(path):
 
 JS_KW = {"if", "for", "while", "switch", "catch", "return", "else", "do", "try",
          "new", "function", "typeof", "await", "yield"}  # never method names
+
+def _go_receiver_name(spec):
+    """Return the base receiver type from `r *Runner`, `*Runner`, or `p Pair[T]`."""
+    m = re.search(r"(?:^|\s)\*?([A-Za-z_]\w*)(?:\s*\[[^]]+\])?\s*$", spec.strip())
+    return m.group(1) if m else ""
 
 CS_KW = JS_KW | {"foreach", "using", "lock", "fixed", "when", "throw", "checked", "unchecked"}
 CS_MOD = (r"(?:(?:public|private|protected|internal|static|virtual|override|abstract|sealed|"
@@ -151,6 +158,20 @@ def symbols(lines, ext):
             elif re.match(r"^// ?[-=]{3,}", s):
                 lbl = s.lstrip("/ -=")[:70]
                 if lbl: out.append((i, lbl))  # drop banners that are only dashes/equals (empty label)
+        elif ext == ".go":
+            m = re.match(r"^type\s+([A-Za-z_]\w*)\b", s)
+            if m:
+                out.append((i, "type " + m.group(1)))
+                continue
+            m = re.match(r"^func\s+\(([^)]*)\)\s+([A-Za-z_]\w*)\s*\(", s)
+            if m:
+                receiver = _go_receiver_name(m.group(1))
+                out.append((i, f"{receiver}.{m.group(2)}" if receiver else m.group(2)))
+            elif (m := re.match(r"^func\s+([A-Za-z_]\w*)\s*(?:\[[^]]+\]\s*)?\(", s)):
+                out.append((i, m.group(1)))
+            elif re.match(r"^// ?[-=]{3,}", s):
+                lbl = s.lstrip("/ -=")[:70]
+                if lbl: out.append((i, lbl))
         elif ext == ".cs":
             m = CS_TYPE.match(s)
             if m:
@@ -206,6 +227,13 @@ def docstring_end(lines, ext):
     """Index (0-based) right after a leading module docstring / banner comment."""
     i = 0
     if lines and lines[0].startswith("#!"): i = 1
+    if ext == ".go":
+        # Build constraints and package documentation must stay before `package`; inserting the
+        # header after the package clause preserves both Go semantics and godoc association.
+        for j, line in enumerate(lines):
+            if re.match(r"^package\s+[A-Za-z_]\w*\s*$", line.rstrip("\r\n")):
+                return j + 2 if j + 1 < len(lines) and not lines[j + 1].strip() else j + 1
+        return 0
     if ext in (".js", ".jsx", ".ts", ".tsx", ".cs"):
         if i < len(lines) and lines[i].lstrip().startswith("/*"):
             while i < len(lines) and "*/" not in lines[i]: i += 1
@@ -293,12 +321,12 @@ def build(path, lines=None):
 
 # ---------------------------------------------------------------- folder driver
 
-CODE_EXT = (".py", ".js", ".jsx", ".ts", ".tsx", ".ps1", ".psm1", ".cs")
+CODE_EXT = (".py", ".js", ".jsx", ".ts", ".tsx", ".go", ".ps1", ".psm1", ".cs")
 SKIP_DIRS = {"__pycache__", "node_modules", ".git", "dist", "build", ".venv", "venv",
              ".pytest_cache", ".mypy_cache", "migrations", "alembic", "assets", "vendor",
              "volumes",   # 'volumes' = runtime bind-mount data (DB/redis/etc.) — never map
              "cache", ".cache"}  # generated tool caches (e.g. content-addressed AST dumps)
-CACHE_VER = 6  # bump when symbol extraction changes, to invalidate stale cached symbol lists
+CACHE_VER = 7  # bump when symbol extraction changes, to invalidate stale cached symbol lists
 HASHFILE = re.compile(r"^[0-9a-f]{32,}\.")  # content-addressed cache artifacts (sha-named blobs)
 MAX_LINES = 8000  # default upper cap; overridable via --max-lines
 DOC_EXT = {".md", ".json", ".html", ".htm", ".css", ".sql", ".yml", ".yaml",
@@ -344,6 +372,22 @@ def doc_descriptor(path, ext):
     except Exception:
         return ""
     return ""
+
+def doc_symbols(lines, ext):
+    """Return major Markdown headings, ignoring fenced examples; other docs stay descriptor-only."""
+    if ext != ".md":
+        return []
+    out, fence = [], None
+    for i, line in enumerate(lines, 1):
+        s = line.rstrip("\r\n")
+        marker = re.match(r"^\s{0,3}(`{3,}|~{3,})", s)
+        if marker:
+            token = marker.group(1)[0]
+            fence = None if fence == token else (token if fence is None else fence)
+            continue
+        if fence is None and (m := re.match(r"^\s{0,3}#{1,2}\s+(.+?)\s*$", s)):
+            out.append((i, re.sub(r"\s+#+\s*$", "", m.group(1)).strip()))
+    return out
 
 def body_hash(path, lines=None):
     """SHA1 of the file with any NAV INDEX block stripped — stable across header refreshes.
@@ -465,6 +509,7 @@ def run_folder(root, rroot, args):
                 if need_header:
                     ok, out = build(path, raw)
                     if ok:
+                        n_lines = len(out)
                         syms = _clean_syms(out, ext)  # post-build buffer: line nums incl. header
                         refreshed += 1
                     else:
@@ -477,7 +522,7 @@ def run_folder(root, rroot, args):
                 entries.append((rel, n_lines, syms, ""))
         else:
             if not args.no_map:
-                entries.append((rel, n_lines, [], doc_descriptor(path, ext)))
+                entries.append((rel, n_lines, doc_symbols(raw, ext), doc_descriptor(path, ext)))
 
     # prune dead cache entries (deleted/renamed files) so the cache can't grow without bound.
     # SCOPED: only entries under the folder we just walked are candidates for removal — a subfolder
@@ -574,7 +619,7 @@ def write_map(root, rroot, args, entries):
                 preview = "  ".join(f"L{ln}:{lbl}" for ln, lbl in syms[:24])
                 out.append(f"  <sub>{preview}{' …' if len(syms) > 24 else ''}</sub>")
         out.append("")
-        open(os.path.join(d, MAP_NAME), "w", encoding="utf-8").write("\n".join(out) + "\n")
+        open(os.path.join(d, MAP_NAME), "w", encoding="utf-8").write("\n".join(out).rstrip() + "\n")
     return detailed
 
 def write_tree(rroot, args, entries, detailed):
@@ -600,7 +645,7 @@ def write_tree(rroot, args, entries, detailed):
         out.append(f"## `{rel_dir}/` ({len(by_dir[d])} files){marker}")
         out.append("  ".join(f"{name}({n})" for name, n in sorted(by_dir[d])))
         out.append("")
-    open(os.path.join(rroot, MAP_NAME), "w", encoding="utf-8").write("\n".join(out) + "\n")
+    open(os.path.join(rroot, MAP_NAME), "w", encoding="utf-8").write("\n".join(out).rstrip() + "\n")
 
 # ---------------------------------------------------------------- pre-commit hook
 
@@ -643,7 +688,7 @@ def install_hook(rroot):
     body = (
         "#!/bin/sh\n"
         f"{HOOK_MARK} (auto-generated; delete this file to uninstall)\n"
-        "staged=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\\.(py|jsx?|tsx?|ps1|cs)$')\n"
+        "staged=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\\.(go|py|jsx?|tsx?|ps1|cs)$')\n"
         "[ -z \"$staged\" ] && exit 0\n"
         f"echo \"$staged\" | tr '\\n' '\\0' | xargs -0 python \"{me}\" --auto || exit 1\n"
         "echo \"$staged\" | tr '\\n' '\\0' | xargs -0 git add\n")
