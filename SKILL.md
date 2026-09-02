@@ -18,10 +18,10 @@ description: >-
 <!--   L27    navindex — navigation indexes for large codebases -->
 <!--   L29    Why this exists -->
 <!--   L56    When to READ an index (do this first) -->
-<!--   L69    When to GENERATE / REFRESH -->
-<!--   L92    How to run -->
-<!--   L139   Proof / sanity check -->
-<!--   L147   Housekeeping -->
+<!--   L75    When to GENERATE / REFRESH -->
+<!--   L98    How to run -->
+<!--   L145   Proof / sanity check -->
+<!--   L153   Housekeeping -->
 <!-- ======================= END NAV INDEX ======================= -->
 
 # navindex — navigation indexes for large codebases
@@ -62,6 +62,12 @@ line. That is why the discipline below ties regeneration to the moments code str
   can open exactly the right file/lines instead of fanning out with grep.
 - **When opening a large file**, read its NAV INDEX header (the top comment block) first and jump
   straight to the line you need.
+- **Read the range in the same call that finds it.** The map (or the NAV header) says *where*; the
+  `sed -n` of that range belongs in the same call, not the next one — a line number fetched in one
+  call and spent in the next is the most common way one question turns into three calls.
+- **Prefer a text anchor to a pasted number.** `sed -n '/^## Section/,/^## /p'` survives a
+  regenerated header and an edited file; `sed -n '120,160p'` returns the wrong lines, or none, the
+  moment the file moves under it — and it fails silently.
 
 If a `__navi__.md` looks out of date (line numbers don't match, files missing), regenerate it
 (below) rather than trusting it.
