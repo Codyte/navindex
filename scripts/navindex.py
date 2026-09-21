@@ -62,21 +62,21 @@ files already carrying a header or at/above --threshold — what the pre-commit 
 #   L390   _is_vendor
 #   L394   find_repo_root
 #   L407   doc_symbols
-#   L423   body_hash
-#   L434   git_ignored
-#   L454   walk
-#   L484   run_folder
-#   L601   _is_generated_map
-#   L611   cleanup_stale_maps
-#   L628   _is_detailed
-#   L635   write_map
-#   L666   write_tree
-#   L692   pre-commit hook
-#   L694   HOOK_MARK
-#   L696   _wants_header
-#   L710   install_hook
-#   L745   entrypoint
-#   L747   main
+#   L424   body_hash
+#   L435   git_ignored
+#   L455   walk
+#   L485   run_folder
+#   L602   _is_generated_map
+#   L612   cleanup_stale_maps
+#   L629   _is_detailed
+#   L636   write_map
+#   L667   write_tree
+#   L693   pre-commit hook
+#   L695   HOOK_MARK
+#   L697   _wants_header
+#   L711   install_hook
+#   L746   entrypoint
+#   L748   main
 # ======================= END NAV INDEX =======================
 
 import argparse, hashlib, json, os, re, subprocess, sys, datetime
@@ -416,7 +416,8 @@ def doc_symbols(lines, ext):
             token = marker.group(1)[0]
             fence = None if fence == token else (token if fence is None else fence)
             continue
-        if fence is None and (m := re.match(r"^\s{0,3}#{1,2}\s+(.+?)\s*$", s)):
+        # `###` only when numbered (`4.1 Topic`): a subsection meant to be jumped to, not prose structure.
+        if fence is None and (m := re.match(r"^\s{0,3}(?:#{1,2}\s+|###\s+(?=\d+\.\d+\s))(.+?)\s*$", s)):
             out.append((i, re.sub(r"\s+#+\s*$", "", m.group(1)).strip()))
     return out
 
