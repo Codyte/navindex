@@ -143,7 +143,8 @@ def main():
         # header line numbers point at the real symbols
         lines = open(lf, encoding="utf-8").read().splitlines()
         for entry in [l for l in lines if l.startswith("#   L")]:
-            n, lbl = entry[5:].split(None, 1)
+            n, size, lbl = entry[5:].split(None, 2)
+            assert size[-1] in "BK" and size[0].isdigit(), entry
             target = lines[int(n) - 1]
             assert lbl.lstrip(".") in target, (entry, target)
 
@@ -177,7 +178,7 @@ def main():
         assert go_lines[package_line - 1] == "// Package demo exercises Go NAV INDEX generation."
         assert go_lines[package_line + 2].startswith("// ===")
         for entry in [line for line in go_lines if line.startswith("//   L")]:
-            n, lbl = entry[6:].split(None, 1)
+            n, _size, lbl = entry[6:].split(None, 2)
             target = go_lines[int(n) - 1]
             assert lbl.split(".")[-1].replace("type ", "") in target, (entry, target)
         if gofmt := shutil.which("gofmt"):
@@ -259,6 +260,12 @@ def main():
         nv.run_folder(repo, repo, args)
         assert open(os.path.join(repo, nv.MAP_NAME), "rb").read() == first_tree
         assert open(os.path.join(pkg, nv.MAP_NAME), "rb").read() == first_map
+
+    # heft: ordinary file silent; big or wide file flagged for the map
+    assert nv.heft(["x\n"] * 10) == ""
+    assert nv.heft(["x" * 99 + "\n"] * 400) == "39K"
+    assert nv.heft(["y" * 2000 + "\n"]) == "2.0K wide"
+    assert nv._size(1023) == "1023B" and nv._size(1536) == "1.5K" and nv._size(20480) == "20K"
 
     print("test_navindex: all checks passed")
 

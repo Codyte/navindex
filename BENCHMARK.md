@@ -1,14 +1,14 @@
 <!-- ====================== BEGIN NAV INDEX ====================== -->
 <!-- NAV INDEX — auto-generated symbol map (refresh via the navindex skill) -->
-<!--   L14    navindex — benchmark -->
-<!--   L22    TL;DR -->
-<!--   L32    Quick navigation -->
-<!--   L49    Setup & Measurements -->
-<!--   L86    Test 1 — in-file header on a big file (the skill's home turf) -->
-<!--   L152   Test 2 — folder map on a cross-file trace (model-dependent) -->
-<!--   L202   Accuracy & hallucination -->
-<!--   L208   Limitations (what this benchmark does *not* prove) -->
-<!--   L226   Reproduce -->
+<!--   L14     425B  navindex — benchmark -->
+<!--   L22     906B  TL;DR -->
+<!--   L32     896B  Quick navigation -->
+<!--   L49     1.9K  Setup & Measurements -->
+<!--   L86     3.6K  Test 1 — in-file header on a big file (the skill's home turf) -->
+<!--   L152    2.9K  Test 2 — folder map on a cross-file trace (model-dependent) -->
+<!--   L202    544B  Accuracy & hallucination -->
+<!--   L208    1.2K  Limitations (what this benchmark does *not* prove) -->
+<!--   L226    978B  Reproduce -->
 <!-- ======================= END NAV INDEX ======================= -->
 
 # navindex — benchmark

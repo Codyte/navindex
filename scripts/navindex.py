@@ -28,55 +28,57 @@ files already carrying a header or at/above --threshold — what the pre-commit 
 """
 # ====================== BEGIN NAV INDEX ======================
 # NAV INDEX — auto-generated symbol map (refresh via the navindex skill)
-#   L84    TOP
-#   L85    HEADER_EXEMPT_DOCS
-#   L88    per-file core
-#   L90    comment_token
-#   L95    header_exempt
-#   L98    comment_line
-#   L101   file_eol
-#   L113   JS_KW
-#   L116   _go_receiver_name
-#   L121   CS_KW
-#   L122   CS_MOD
-#   L128   CS_TYPE
-#   L129   CS_METHOD
-#   L130   CS_PROP
-#   L131   CS_CASE
-#   L140   CS_CASE_VERB
-#   L142   symbols
-#   L242   docstring_end
-#   L275   strip_old
-#   L302   strip_headers
-#   L314   nav_header_range
-#   L325   build
-#   L375   folder driver
-#   L377   CODE_EXT
-#   L378   SKIP_DIRS
-#   L382   CACHE_VER
-#   L383   HASHFILE
-#   L384   MAX_LINES
-#   L385   DOC_EXT
-#   L387   MAP_NAME
-#   L388   CACHE_NAME
-#   L390   _is_vendor
-#   L394   find_repo_root
-#   L407   doc_symbols
-#   L424   body_hash
-#   L435   git_ignored
-#   L455   walk
-#   L485   run_folder
-#   L602   _is_generated_map
-#   L612   cleanup_stale_maps
-#   L629   _is_detailed
-#   L636   write_map
-#   L667   write_tree
-#   L693   pre-commit hook
-#   L695   HOOK_MARK
-#   L697   _wants_header
-#   L711   install_hook
-#   L746   entrypoint
-#   L748   main
+#   L86      81B  TOP
+#   L87     138B  HEADER_EXEMPT_DOCS
+#   L90      82B  per-file core
+#   L92     209B  comment_token
+#   L97      90B  header_exempt
+#   L100    102B  comment_line
+#   L103    501B  file_eol
+#   L115    160B  JS_KW
+#   L118    233B  _go_receiver_name
+#   L123     95B  CS_KW
+#   L124    544B  CS_MOD
+#   L130     90B  CS_TYPE
+#   L131     92B  CS_METHOD
+#   L132    100B  CS_PROP
+#   L133    766B  CS_CASE
+#   L142     50B  CS_CASE_VERB
+#   L144    6.2K  symbols
+#   L244    1.4K  docstring_end
+#   L277    1.3K  strip_old
+#   L304    489B  strip_headers
+#   L316    434B  nav_header_range
+#   L327    204B  _size
+#   L332    380B  heft
+#   L339    2.8K  build
+#   L393     82B  folder driver
+#   L395     80B  CODE_EXT
+#   L396    362B  SKIP_DIRS
+#   L400     93B  CACHE_VER
+#   L401     98B  HASHFILE
+#   L402     67B  MAX_LINES
+#   L403    159B  DOC_EXT
+#   L405     25B  MAP_NAME
+#   L406     37B  CACHE_NAME
+#   L408    158B  _is_vendor
+#   L412    495B  find_repo_root
+#   L425    781B  doc_symbols
+#   L442    492B  body_hash
+#   L453    1.1K  git_ignored
+#   L473    1.5K  walk
+#   L503    5.6K  run_folder
+#   L621    377B  _is_generated_map
+#   L631    713B  cleanup_stale_maps
+#   L648    479B  _is_detailed
+#   L655    1.8K  write_map
+#   L686    1.6K  write_tree
+#   L712     84B  pre-commit hook
+#   L714     42B  HOOK_MARK
+#   L716    727B  _wants_header
+#   L730    1.8K  install_hook
+#   L765     79B  entrypoint
+#   L767    3.0K  main
 # ======================= END NAV INDEX =======================
 
 import argparse, hashlib, json, os, re, subprocess, sys, datetime
@@ -322,6 +324,18 @@ def nav_header_range(lines, tok):
             break
     return f"NAV L{start}-L{end}" if start and end else "NAV missing"
 
+def _size(b):
+    return f"{b}B" if b < 1024 else f"{b / 1024:.1f}K" if b < 10240 else f"{b // 1024}K"
+
+HEAVY_BYTES, WIDE_CHARS = 30000, 1000  # tool-result cap ~30 KB; a wider line breaks `grep` output
+
+def heft(lines):
+    """'' for an ordinary file; '48K' when it can't be read whole, plus ' wide' when a single line
+    is long enough that an uncut grep match alone can blow the tool cap."""
+    b = sum(len(l.encode("utf-8")) for l in lines)
+    wide = any(len(l) > WIDE_CHARS for l in lines)
+    return (_size(b) if b > HEAVY_BYTES or wide else "") + (" wide" if wide else "")
+
 def build(path, lines=None):
     """Insert/refresh the NAV INDEX header on a single file. Idempotent.
 
@@ -360,8 +374,12 @@ def build(path, lines=None):
     block = [comment_line(tok, "=" * 22 + " BEGIN NAV INDEX " + "=" * 22),
              comment_line(tok, TOP)]
     height = len(syms) + 4  # 2 header (begin+title) + each sym + 1 end + 1 trailing blank
-    for n, lbl in syms:
-        block.append(comment_line(tok, f"  L{n + height:<5} {lbl}"))
+    # each entry carries the bytes from its line to the next entry (or EOF): the reader sizes a
+    # `sed` of that section before running it, with no `wc` round-trip
+    ends = [n for n, _ in syms[1:]] + [len(lines) + 1]
+    for (n, lbl), e in zip(syms, ends):
+        size = _size(sum(len(l.encode("utf-8")) for l in lines[n - 1:e - 1]))
+        block.append(comment_line(tok, f"  L{n + height:<5} {size:>5}  {lbl}"))
     block.append(comment_line(tok, "=" * 23 + " END NAV INDEX " + "=" * 23))
     block.append("\n")
     assert len(block) == height, f"height mismatch {len(block)} vs {height}"
@@ -379,7 +397,7 @@ SKIP_DIRS = {"__pycache__", "node_modules", ".git", "dist", "build", ".venv", "v
              ".pytest_cache", ".mypy_cache", "migrations", "alembic", "assets", "vendor",
              "volumes",   # 'volumes' = runtime bind-mount data (DB/redis/etc.) — never map
              "cache", ".cache"}  # generated tool caches (e.g. content-addressed AST dumps)
-CACHE_VER = 8  # bump when symbol/header extraction changes, to invalidate stale cached lists
+CACHE_VER = 9 # bump when symbol/header extraction changes, to invalidate stale cached lists
 HASHFILE = re.compile(r"^[0-9a-f]{32,}\.")  # content-addressed cache artifacts (sha-named blobs)
 MAX_LINES = 8000  # default upper cap; overridable via --max-lines
 DOC_EXT = {".md", ".json", ".html", ".htm", ".css", ".sql", ".yml", ".yaml",
@@ -558,6 +576,7 @@ def run_folder(root, rroot, args):
 
             if not args.no_map:
                 note = nav_header_range(raw, comment_token(path)) if is_markdown else ""
+                note = "; ".join(x for x in (note, heft(raw)) if x)
                 entries.append((rel, n_lines, [] if is_markdown else syms, note))
         else:
             if is_exempt and not args.map_only and strip_headers(raw, path) != raw:
@@ -566,7 +585,7 @@ def run_folder(root, rroot, args):
                     raw, n_lines = out, len(out)
                     refreshed += 1
             if not args.no_map:
-                entries.append((rel, n_lines, [], ""))
+                entries.append((rel, n_lines, [], heft(raw)))
 
     # prune dead cache entries (deleted/renamed files) so the cache can't grow without bound.
     # SCOPED: only entries under the folder we just walked are candidates for removal — a subfolder

@@ -1,8 +1,8 @@
 # __navi__ · `scripts/` — 2 files → code symbols / text NAV ranges
-<!-- navindex · 2026-09-17 · DO NOT EDIT BY HAND; regen via navindex skill -->
+<!-- navindex · 2026-09-21 · DO NOT EDIT BY HAND; regen via navindex skill -->
 ↑ repo tree: [`../__navi__.md`](../__navi__.md)
 
-- **navindex.py** (800 ln)
-  <sub>L84:TOP  L85:HEADER_EXEMPT_DOCS  L88:per-file core  L90:comment_token  L95:header_exempt  L98:comment_line  L101:file_eol  L113:JS_KW  L116:_go_receiver_name  L121:CS_KW  L122:CS_MOD  L128:CS_TYPE  L129:CS_METHOD  L130:CS_PROP  L131:CS_CASE  L140:CS_CASE_VERB  L142:symbols  L242:docstring_end  L275:strip_old  L302:strip_headers  L314:nav_header_range  L325:build  L375:folder driver  L377:CODE_EXT …</sub>
-- **test_navindex.py** (266 ln)
+- **navindex.py** (820 ln) — 41K
+  <sub>L86:TOP  L87:HEADER_EXEMPT_DOCS  L90:per-file core  L92:comment_token  L97:header_exempt  L100:comment_line  L103:file_eol  L115:JS_KW  L118:_go_receiver_name  L123:CS_KW  L124:CS_MOD  L130:CS_TYPE  L131:CS_METHOD  L132:CS_PROP  L133:CS_CASE  L142:CS_CASE_VERB  L144:symbols  L244:docstring_end  L277:strip_old  L304:strip_headers  L316:nav_header_range  L327:_size  L332:heft  L339:build …</sub>
+- **test_navindex.py** (273 ln)
   <sub>L98:labels  L101:main</sub>

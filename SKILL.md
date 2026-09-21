@@ -15,14 +15,14 @@ description: >-
 
 <!-- ====================== BEGIN NAV INDEX ====================== -->
 <!-- NAV INDEX — auto-generated symbol map (refresh via the navindex skill) -->
-<!--   L28    navindex — navigation indexes for large codebases -->
-<!--   L30    Companion skill: handoff -->
-<!--   L42    Why this exists -->
-<!--   L69    When to READ an index (do this first) -->
-<!--   L88    When to GENERATE / REFRESH -->
-<!--   L111   How to run -->
-<!--   L158   Proof / sanity check -->
-<!--   L166   Housekeeping -->
+<!--   L28      55B  navindex — navigation indexes for large codebases -->
+<!--   L30     806B  Companion skill: handoff -->
+<!--   L42     2.2K  Why this exists -->
+<!--   L72     1.3K  When to READ an index (do this first) -->
+<!--   L91     1.2K  When to GENERATE / REFRESH -->
+<!--   L114    2.8K  How to run -->
+<!--   L161    419B  Proof / sanity check -->
+<!--   L169    829B  Housekeeping -->
 <!-- ======================= END NAV INDEX ======================= -->
 
 # navindex — navigation indexes for large codebases
@@ -56,7 +56,10 @@ model**: the root tree tells you *which folder*, the folder map tells you *which
   root tree instead, and any stale map left behind by a prior run is auto-deleted. This keeps deep,
   narrow trees (e.g. one tiny `main.ps1` per leaf) from spawning hundreds of near-empty maps.
 - **In-file header** — a comment block at the top of a large source file, or after Markdown YAML
-  front matter, mapping `line number → symbol/heading`. An
+  front matter, mapping `line number → bytes up to the next entry → symbol/heading`
+  (`L42  1.9K  Why this exists`), so a section's `sed` is sized before it runs. Maps and the root
+  tree tag only files a whole read would blow the ~30 KB tool cap on (`48K`) or whose single lines
+  exceed 1 000 chars (`wide`: `grep` there needs `| cut -c1-N`); ordinary files stay untagged. An
   agent that reads only the first ~40 lines instantly knows where everything is.
 
 To find a function deep in the tree: read the **root tree** (locate its folder) → read that

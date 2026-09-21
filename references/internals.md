@@ -1,13 +1,13 @@
 <!-- ====================== BEGIN NAV INDEX ====================== -->
 <!-- NAV INDEX — auto-generated symbol map (refresh via the navindex skill) -->
-<!--   L13    navindex internals -->
-<!--   L18    What counts as a symbol (per language) -->
-<!--   L84    Gitignored paths -->
-<!--   L97    Where the header is inserted -->
-<!--   L111   Pre-commit hook (`--install-hook`) -->
-<!--   L121   Folder map (`__navi__.md`) format -->
-<!--   L129   Skip rules -->
-<!--   L142   Cache -->
+<!--   L13     185B  navindex internals -->
+<!--   L18     4.1K  What counts as a symbol (per language) -->
+<!--   L84     808B  Gitignored paths -->
+<!--   L97     1.3K  Where the header is inserted -->
+<!--   L116    628B  Pre-commit hook (`--install-hook`) -->
+<!--   L126    488B  Folder map (`__navi__.md`) format -->
+<!--   L134    779B  Skip rules -->
+<!--   L147    711B  Cache -->
 <!-- ======================= END NAV INDEX ======================= -->
 
 # navindex internals
@@ -102,7 +102,12 @@ Markdown, YAML front matter remains first and the header uses one HTML comment p
 is delimited by `BEGIN NAV INDEX` / `END NAV INDEX` lines. On refresh, the
 old block is stripped (plus one trailing blank line) and a fresh one inserted, which is what makes
 it idempotent. Line numbers in the header account for the header's own height, so they point at
-the real post-insertion lines.
+the real post-insertion lines. Each entry also carries the UTF-8 bytes from its line to the next
+entry (or EOF), so a class entry covers only the lines before its first member.
+
+**Heft tags** in maps and the root tree: a file over 30 000 bytes gets its size (`48K`); a file
+with any line over 1 000 chars gets its size plus ` wide`. Everything else stays untagged, so the
+map grows only where a whole read or an uncut grep would overflow the tool cap.
 
 **Line endings are preserved**: the rewrite detects the file's first line break (CRLF vs LF) and
 writes the whole file back with that EOL, so a header refresh on Windows never CRLF-ifies an LF
