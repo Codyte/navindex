@@ -1,4 +1,11 @@
 """Self-check for navindex.py — run: python scripts/test_navindex.py (exit 0 = ok)."""
+# ====================== BEGIN NAV INDEX ======================
+# NAV INDEX — auto-generated symbol map (refresh via the navindex skill)
+#   L105    103B  labels
+#   L108    2.5K  check_folder_scope
+#   L154    9.0K  main
+# ======================= END NAV INDEX =======================
+
 import os, shutil, subprocess, sys, tempfile
 from types import SimpleNamespace
 
@@ -97,6 +104,52 @@ MD = (
 
 def labels(text, ext):
     return [lbl for _, lbl in nv.symbols(text.splitlines(keepends=True), ext)]
+
+def check_folder_scope():
+    """A folder run writes nothing outside its folder, and deletes only maps in the folders it
+    evaluated: a map beyond that scope was never visited, so it is not known to be stale."""
+    args = SimpleNamespace(depth=1, threshold=1, min_lines=0, max_lines=8000,
+                           map_only=False, no_map=False, include_ignored=False)
+    marker = "<!-- navindex · 2020-01-01 · DO NOT EDIT BY HAND; regen via navindex skill -->"
+
+    def put(repo, rel, text):
+        path = os.path.join(repo, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        open(path, "w", encoding="utf-8", newline="\n").write(text)
+
+    def snapshot(repo):
+        out = {}
+        for cur, _, files in os.walk(repo):
+            for f in files:
+                with open(os.path.join(cur, f), "rb") as handle:
+                    out[os.path.relpath(os.path.join(cur, f), repo)] = handle.read()
+        return out
+
+    repo = tempfile.mkdtemp()
+    try:
+        put(repo, ".navindex-cache.json", "{}\n")
+        put(repo, "src/a.py", "def a():\n    pass\n")
+        put(repo, "src/deep/x/y/z/z.py", "def z():\n    pass\n")  # beyond --depth 1 of src
+        put(repo, os.path.join("src", "deep", "x", "y", "z", nv.MAP_NAME), f"# __navi__ · old\n{marker}\n")
+        put(repo, "sibling/b.py", "def b():\n    pass\n")
+        put(repo, os.path.join("sibling", nv.MAP_NAME), f"# __navi__ · old\n{marker}\n")
+        put(repo, os.path.join("dist", "deep", nv.MAP_NAME), f"# __navi__ · old\n{marker}\n")  # skipped dir
+        deep = os.path.join("src", "deep", "x", "y", "z", nv.MAP_NAME)
+        dist = os.path.join("dist", "deep", nv.MAP_NAME)
+
+        before = snapshot(repo)
+        nv.run_folder(os.path.join(repo, "src"), repo, args)
+        after = snapshot(repo)
+        outside = sorted(k for k in set(before) | set(after)
+                         if before.get(k) != after.get(k) and not k.startswith("src" + os.sep))
+        assert not outside, f"folder run changed files outside its folder: {outside}"
+        assert after.get(deep) == before[deep], "folder run touched a map beyond --depth"
+
+        nv.run_folder(repo, repo, args)  # root run evaluates every folder, so nothing it can see is stale
+        assert os.path.exists(os.path.join(repo, deep)), "root run deleted a deep map it still evaluates"
+        assert os.path.exists(os.path.join(repo, dist)), "root run deleted a map in a folder it never walks"
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
 
 def main():
     py = labels(PY, ".py")
@@ -267,6 +320,7 @@ def main():
     assert nv.heft(["y" * 2000 + "\n"]) == "2.0K wide"
     assert nv._size(1023) == "1023B" and nv._size(1536) == "1.5K" and nv._size(20480) == "20K"
 
+    check_folder_scope()
     print("test_navindex: all checks passed")
 
 if __name__ == "__main__":

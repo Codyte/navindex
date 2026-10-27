@@ -53,7 +53,7 @@ model**: the root tree tells you *which folder*, the folder map tells you *which
   outline; Markdown only with the line range of its in-file NAV header; other text only by name/size.
   It never duplicates document headings. A breadcrumb points back to the root tree. Folders of trivial
   stubs (no extracted symbols and nothing past `--threshold`) get **no** map — they're listed in the
-  root tree instead, and any stale map left behind by a prior run is auto-deleted. This keeps deep,
+  root tree instead, and any stale map left behind by a prior run in the folders it walks is auto-deleted. This keeps deep,
   narrow trees (e.g. one tiny `main.ps1` per leaf) from spawning hundreds of near-empty maps.
 - **In-file header** — a comment block at the top of a large source file, or after Markdown YAML
   front matter, mapping `line number → bytes up to the next entry → symbol/heading`
@@ -154,9 +154,10 @@ length ≤ --max-lines`; considered Markdown always gets a header, while code ne
 (File mode — passing a path explicitly — always builds the header, ignoring these
 gates, because you asked for that file by name.)
 
-Folder mode is **cache-aware**: it stores a body-hash of each file in
+Folder mode is **cache-aware**: it reads a body-hash of each file from
 `<repo_root>/.navindex-cache.json` and skips the header rewrite for unchanged files, so re-running
-across a large tree is cheap. The output line `headers refreshed=R skipped=S` tells you what it did.
+across a large tree is cheap. Only a repo-root run writes that cache; a folder run writes nothing
+outside its folder. The output line `headers refreshed=R skipped=S` tells you what it did.
 
 ## Proof / sanity check
 

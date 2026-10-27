@@ -28,59 +28,60 @@ files already carrying a header or at/above --threshold — what the pre-commit 
 """
 # ====================== BEGIN NAV INDEX ======================
 # NAV INDEX — auto-generated symbol map (refresh via the navindex skill)
-#   L88      81B  TOP
-#   L89     138B  HEADER_EXEMPT_DOCS
-#   L92      82B  per-file core
-#   L94     209B  comment_token
-#   L99      90B  header_exempt
-#   L102    102B  comment_line
-#   L105    501B  file_eol
-#   L117    160B  JS_KW
-#   L120    233B  _go_receiver_name
-#   L125     95B  CS_KW
-#   L126    544B  CS_MOD
-#   L132     90B  CS_TYPE
-#   L133     92B  CS_METHOD
-#   L134    100B  CS_PROP
-#   L135    766B  CS_CASE
-#   L144     50B  CS_CASE_VERB
-#   L146    6.2K  symbols
-#   L246    1.4K  docstring_end
-#   L279    1.3K  strip_old
-#   L306    489B  strip_headers
-#   L318    434B  nav_header_range
-#   L329    204B  _size
-#   L334    380B  heft
-#   L341    2.8K  build
-#   L395     82B  folder driver
-#   L397     80B  CODE_EXT
-#   L398    362B  SKIP_DIRS
-#   L402     93B  CACHE_VER
-#   L403     98B  HASHFILE
-#   L404     67B  MAX_LINES
-#   L405    159B  DOC_EXT
-#   L407     25B  MAP_NAME
-#   L408     37B  CACHE_NAME
-#   L410    158B  _is_vendor
-#   L414    495B  find_repo_root
-#   L427    781B  doc_symbols
-#   L444    492B  body_hash
-#   L455    1.1K  git_ignored
-#   L475    1.5K  walk
-#   L505    5.6K  run_folder
-#   L623    377B  _is_generated_map
-#   L633    713B  cleanup_stale_maps
-#   L650    479B  _is_detailed
-#   L657    1.7K  write_map
-#   L688     64B  _STAMP
-#   L690    457B  _write_if_changed
-#   L702    1.6K  write_tree
-#   L728     84B  pre-commit hook
-#   L730     42B  HOOK_MARK
-#   L732    727B  _wants_header
-#   L746    1.8K  install_hook
-#   L781     79B  entrypoint
-#   L783    3.0K  main
+#   L89      81B  TOP
+#   L90     138B  HEADER_EXEMPT_DOCS
+#   L93      82B  per-file core
+#   L95     209B  comment_token
+#   L100     90B  header_exempt
+#   L103    102B  comment_line
+#   L106    501B  file_eol
+#   L118    160B  JS_KW
+#   L121    233B  _go_receiver_name
+#   L126     95B  CS_KW
+#   L127    544B  CS_MOD
+#   L133     90B  CS_TYPE
+#   L134     92B  CS_METHOD
+#   L135    100B  CS_PROP
+#   L136    766B  CS_CASE
+#   L145     50B  CS_CASE_VERB
+#   L147    6.2K  symbols
+#   L247    1.4K  docstring_end
+#   L280    1.3K  strip_old
+#   L307    489B  strip_headers
+#   L319    434B  nav_header_range
+#   L330    204B  _size
+#   L335    380B  heft
+#   L342    2.8K  build
+#   L396     82B  folder driver
+#   L398     80B  CODE_EXT
+#   L399    362B  SKIP_DIRS
+#   L403     93B  CACHE_VER
+#   L404     98B  HASHFILE
+#   L405     67B  MAX_LINES
+#   L406    159B  DOC_EXT
+#   L408     25B  MAP_NAME
+#   L409     37B  CACHE_NAME
+#   L411    158B  _is_vendor
+#   L415    495B  find_repo_root
+#   L428    781B  doc_symbols
+#   L445    492B  body_hash
+#   L456    1.1K  git_ignored
+#   L476   1017B  scoped_dirs
+#   L498    1.0K  walk
+#   L518    5.7K  run_folder
+#   L637    377B  _is_generated_map
+#   L647    775B  cleanup_stale_maps
+#   L664    479B  _is_detailed
+#   L671    1.7K  write_map
+#   L702     64B  _STAMP
+#   L704    457B  _write_if_changed
+#   L716    1.6K  write_tree
+#   L742     84B  pre-commit hook
+#   L744     42B  HOOK_MARK
+#   L746    727B  _wants_header
+#   L760    1.8K  install_hook
+#   L795     79B  entrypoint
+#   L797    3.0K  main
 # ======================= END NAV INDEX =======================
 
 import argparse, hashlib, json, os, re, subprocess, sys, datetime
@@ -472,11 +473,12 @@ def git_ignored(rroot):
         return set()
     return {ln.strip() for ln in r.stdout.splitlines() if ln.strip()}
 
-def walk(root, depth, rroot=None, ignored=frozenset()):
-    """Yield code/doc files within `depth` subfolder levels of root (depth 0 = root only),
-    skipping anything in `ignored` (see git_ignored)."""
+def scoped_dirs(root, depth, rroot, ignored=frozenset()):
+    """Yield (folder, files) for every folder a run of `depth` evaluates under root, skips applied.
+    walk() and cleanup_stale_maps() both iterate it, so the deletion scope cannot drift from the
+    evaluation scope."""
     root = os.path.abspath(root)
-    rroot = os.path.abspath(rroot or root)
+    rroot = os.path.abspath(rroot)
     base_depth = root.rstrip(os.sep).count(os.sep)
 
     def rel(p):
@@ -491,6 +493,17 @@ def walk(root, depth, rroot=None, ignored=frozenset()):
         if cur.count(os.sep) - base_depth > depth:
             dirs[:] = []
             continue
+        yield cur, files
+
+def walk(root, depth, rroot=None, ignored=frozenset()):
+    """Yield code/doc files within `depth` subfolder levels of root (depth 0 = root only),
+    skipping anything in `ignored` (see git_ignored)."""
+    rroot = os.path.abspath(rroot or root)
+
+    def rel(p):
+        return os.path.relpath(p, rroot).replace(os.sep, "/")
+
+    for cur, files in scoped_dirs(root, depth, rroot, ignored):
         for f in sorted(files):
             if ignored and rel(os.path.join(cur, f)) in ignored:
                 continue  # ignored file sitting in a tracked folder
@@ -603,7 +616,8 @@ def run_folder(root, rroot, args):
             continue  # was under this run's root but no longer exists → drop
         pruned[k] = v
     cache = pruned
-    json.dump(cache, open(cache_path, "w", encoding="utf-8"), indent=0)
+    if is_global:  # the cache sits at the repo root: a folder run reads it but never writes outside its folder
+        json.dump(cache, open(cache_path, "w", encoding="utf-8"), indent=0)
     detailed = set()
     removed = 0
     if not args.no_map:
@@ -613,7 +627,7 @@ def run_folder(root, rroot, args):
             # so one read of the root gives the whole layout + which folder map to open next.
             write_tree(rroot, args, entries, detailed)
         keep = set(detailed) | ({"."} if is_global else set())
-        removed = cleanup_stale_maps(root, rroot, keep)
+        removed = cleanup_stale_maps(root, rroot, keep, eff_depth, ignored)
 
     print(f"navindex: {len(files)} files | headers refreshed={refreshed} skipped={skipped}"
           + ("" if args.no_map else f" | maps written={len(detailed)}"
@@ -630,12 +644,12 @@ def _is_generated_map(path):
     except OSError:
         return False
 
-def cleanup_stale_maps(root, rroot, keep):
-    """Delete navindex-generated __navi__.md files in folders that no longer earn one (now trivial,
-    or now skipped — e.g. cache dirs). A stale map is worse than none: it points at wrong lines."""
+def cleanup_stale_maps(root, rroot, keep, depth, ignored=frozenset()):
+    """Delete navindex-generated __navi__.md files in folders this run evaluated (same scope as walk)
+    that no longer earn one: now trivial, or now skipped. A map outside that scope was never visited,
+    so it is not known to be stale and stays. A stale map is worse than none: it points at wrong lines."""
     removed = 0
-    for cur, dirs, files in os.walk(root):
-        dirs[:] = [d for d in dirs if d not in (".git", "node_modules")]  # never descend these
+    for cur, files in scoped_dirs(root, depth, rroot, ignored):
         if MAP_NAME not in files:
             continue
         rel = os.path.relpath(cur, rroot).replace(os.sep, "/") or "."
