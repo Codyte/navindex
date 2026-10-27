@@ -28,57 +28,59 @@ files already carrying a header or at/above --threshold — what the pre-commit 
 """
 # ====================== BEGIN NAV INDEX ======================
 # NAV INDEX — auto-generated symbol map (refresh via the navindex skill)
-#   L86      81B  TOP
-#   L87     138B  HEADER_EXEMPT_DOCS
-#   L90      82B  per-file core
-#   L92     209B  comment_token
-#   L97      90B  header_exempt
-#   L100    102B  comment_line
-#   L103    501B  file_eol
-#   L115    160B  JS_KW
-#   L118    233B  _go_receiver_name
-#   L123     95B  CS_KW
-#   L124    544B  CS_MOD
-#   L130     90B  CS_TYPE
-#   L131     92B  CS_METHOD
-#   L132    100B  CS_PROP
-#   L133    766B  CS_CASE
-#   L142     50B  CS_CASE_VERB
-#   L144    6.2K  symbols
-#   L244    1.4K  docstring_end
-#   L277    1.3K  strip_old
-#   L304    489B  strip_headers
-#   L316    434B  nav_header_range
-#   L327    204B  _size
-#   L332    380B  heft
-#   L339    2.8K  build
-#   L393     82B  folder driver
-#   L395     80B  CODE_EXT
-#   L396    362B  SKIP_DIRS
-#   L400     93B  CACHE_VER
-#   L401     98B  HASHFILE
-#   L402     67B  MAX_LINES
-#   L403    159B  DOC_EXT
-#   L405     25B  MAP_NAME
-#   L406     37B  CACHE_NAME
-#   L408    158B  _is_vendor
-#   L412    495B  find_repo_root
-#   L425    781B  doc_symbols
-#   L442    492B  body_hash
-#   L453    1.1K  git_ignored
-#   L473    1.5K  walk
-#   L503    5.6K  run_folder
-#   L621    377B  _is_generated_map
-#   L631    713B  cleanup_stale_maps
-#   L648    479B  _is_detailed
-#   L655    1.8K  write_map
-#   L686    1.6K  write_tree
-#   L712     84B  pre-commit hook
-#   L714     42B  HOOK_MARK
-#   L716    727B  _wants_header
-#   L730    1.8K  install_hook
-#   L765     79B  entrypoint
-#   L767    3.0K  main
+#   L88      81B  TOP
+#   L89     138B  HEADER_EXEMPT_DOCS
+#   L92      82B  per-file core
+#   L94     209B  comment_token
+#   L99      90B  header_exempt
+#   L102    102B  comment_line
+#   L105    501B  file_eol
+#   L117    160B  JS_KW
+#   L120    233B  _go_receiver_name
+#   L125     95B  CS_KW
+#   L126    544B  CS_MOD
+#   L132     90B  CS_TYPE
+#   L133     92B  CS_METHOD
+#   L134    100B  CS_PROP
+#   L135    766B  CS_CASE
+#   L144     50B  CS_CASE_VERB
+#   L146    6.2K  symbols
+#   L246    1.4K  docstring_end
+#   L279    1.3K  strip_old
+#   L306    489B  strip_headers
+#   L318    434B  nav_header_range
+#   L329    204B  _size
+#   L334    380B  heft
+#   L341    2.8K  build
+#   L395     82B  folder driver
+#   L397     80B  CODE_EXT
+#   L398    362B  SKIP_DIRS
+#   L402     93B  CACHE_VER
+#   L403     98B  HASHFILE
+#   L404     67B  MAX_LINES
+#   L405    159B  DOC_EXT
+#   L407     25B  MAP_NAME
+#   L408     37B  CACHE_NAME
+#   L410    158B  _is_vendor
+#   L414    495B  find_repo_root
+#   L427    781B  doc_symbols
+#   L444    492B  body_hash
+#   L455    1.1K  git_ignored
+#   L475    1.5K  walk
+#   L505    5.6K  run_folder
+#   L623    377B  _is_generated_map
+#   L633    713B  cleanup_stale_maps
+#   L650    479B  _is_detailed
+#   L657    1.7K  write_map
+#   L688     64B  _STAMP
+#   L690    457B  _write_if_changed
+#   L702    1.6K  write_tree
+#   L728     84B  pre-commit hook
+#   L730     42B  HOOK_MARK
+#   L732    727B  _wants_header
+#   L746    1.8K  install_hook
+#   L781     79B  entrypoint
+#   L783    3.0K  main
 # ======================= END NAV INDEX =======================
 
 import argparse, hashlib, json, os, re, subprocess, sys, datetime
@@ -680,8 +682,22 @@ def write_map(root, rroot, args, entries):
                 preview = "  ".join(f"L{ln}:{lbl}" for ln, lbl in syms[:24])
                 out.append(f"  <sub>{preview}{' …' if len(syms) > 24 else ''}</sub>")
         out.append("")
-        open(os.path.join(d, MAP_NAME), "w", encoding="utf-8").write("\n".join(out).rstrip() + "\n")
+        _write_if_changed(os.path.join(d, MAP_NAME), out)
     return detailed
+
+_STAMP = re.compile(r"<!-- navindex · \d{4}-\d{2}-\d{2} · ")
+
+def _write_if_changed(path, out):
+    """Write a map unless only its date stamp would change: a regen of one folder must leave the
+    unchanged maps around it byte-identical."""
+    text = "\n".join(out).rstrip() + "\n"
+    try:
+        old = open(path, encoding="utf-8").read()
+    except OSError:
+        old = None
+    if old is not None and _STAMP.sub("", old) == _STAMP.sub("", text):
+        return
+    open(path, "w", encoding="utf-8").write(text)
 
 def write_tree(rroot, args, entries, detailed):
     """Root-level GLOBAL index: every folder below -> files and line counts; Markdown adds only its
@@ -707,7 +723,7 @@ def write_tree(rroot, args, entries, detailed):
         out.append("  ".join(f"{name}({n}{'; ' + desc if desc else ''})"
                             for name, n, desc in sorted(by_dir[d])))
         out.append("")
-    open(os.path.join(rroot, MAP_NAME), "w", encoding="utf-8").write("\n".join(out).rstrip() + "\n")
+    _write_if_changed(os.path.join(rroot, MAP_NAME), out)
 
 # ---------------------------------------------------------------- pre-commit hook
 
